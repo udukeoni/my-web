@@ -158,7 +158,7 @@
     <header>
       <h1>공포탐욕지수</h1>
       <p class="meta-info">코스피·S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
-      <p class="meta-info" id="update-status">데이터 자동 연동 진행 중...</p>
+      <p class="meta-info" id="update-status">데이터 동기화 준비 중...</p>
     </header>
 
     <div class="card-grid">
@@ -174,7 +174,7 @@
         </div>
         <div class="score-box">
           <span class="score-num" id="score-kr">--</span>
-          <span class="badge" id="badge-kr">계산 중</span>
+          <span class="badge" id="badge-kr">대기 중</span>
         </div>
         <div class="source-tag">모멘텀 지표 기반 자체 집계</div>
       </div>
@@ -191,7 +191,7 @@
         </div>
         <div class="score-box">
           <span class="score-num" id="score-us">--</span>
-          <span class="badge" id="badge-us">수신 중</span>
+          <span class="badge" id="badge-us">대기 중</span>
         </div>
         <div class="source-tag">CNN 지표 연동</div>
       </div>
@@ -208,7 +208,7 @@
         </div>
         <div class="score-box">
           <span class="score-num" id="score-crypto">--</span>
-          <span class="badge" id="badge-crypto">수신 중</span>
+          <span class="badge" id="badge-crypto">대기 중</span>
         </div>
         <div class="source-tag">alternative.me 실시간</div>
       </div>
@@ -254,42 +254,83 @@
       }
     }
 
+    // 현재 '연-월-일-시' 키 생성 (예: 2026-10-9-19)
+    function getCurrentHourKey() {
+      const now = new Date();
+      return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-${now.getHours()}`;
+    }
+
     async function loadAllData() {
       const now = new Date();
-      document.getElementById('update-status').textContent = 
-        `${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${now.getHours()}시 기준 자동 갱신`;
+      const currentHourKey = getCurrentHourKey();
+      const cached = localStorage.getItem('fgi_hourly_cache');
 
-      // 1. 코인 실시간 API
+      // 1. 이미 이번 정각에 받아둔 데이터가 있다면 즉시 화면에 복원하고 종료!
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.hourKey === currentHourKey && parsed.kr && parsed.us && parsed.crypto) {
+            renderCard('crypto', parsed.crypto);
+            renderCard('us', parsed.us);
+            renderCard('kr', parsed.kr);
+            document.getElementById('update-status').textContent = 
+              `${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${now.getHours()}시 기준 (저장된 데이터 즉시 로드)`;
+            return;
+          }
+        } catch (e) {
+          // 파싱 실패 시 아래에서 새로 조회
+        }
+      }
+
+      // 2. 정각이 지나 새 시간이 되었을 때만 외부에서 새로 읽어오기
+      document.getElementById('update-status').textContent = 
+        `${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${now.getHours()}시 기준 최신 데이터 수신 중...`;
+
+      let cryptoScore = 59;
+      let usScore = 38;
+
+      // 2-1. 코인 API 조회
       try {
         const coinRes = await fetch('https://api.alternative.me/fng/?limit=1');
         const coinData = await coinRes.json();
         if (coinData.data && coinData.data[0]) {
-          renderCard('crypto', Number(coinData.data[0].value));
+          cryptoScore = Number(coinData.data[0].value);
         }
-      } catch (e) {
-        renderCard('crypto', 59);
-      }
+      } catch (e) {}
 
-      // 2. 미국 증시 지표 (프록시 경유 실시간 조회)
+      // 2-2. 미국 S&P500 API 조회 (프록시)
       try {
         const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://production.dataviz.cnn.io/index/fearandgreed/graphdata');
         const usRes = await fetch(proxyUrl);
         const usJson = await usRes.json();
-        const usScore = Math.round(usJson.fear_and_greed.score);
-        renderCard('us', usScore);
-      } catch (e) {
-        renderCard('us', 38); // 네트워크 지연 시 최근 지수 안전 표기
-      }
+        if (usJson && usJson.fear_and_greed && usJson.fear_and_greed.score) {
+          usScore = Math.round(usJson.fear_and_greed.score);
+        }
+      } catch (e) {}
 
-      // 3. 코스피 자체 산출 (미국 지수 및 시장 변동성 반영 계산)
-      const usCurrent = Number(document.getElementById('score-us').textContent) || 38;
-      const krEstimated = Math.min(100, Math.max(0, Math.round(usCurrent * 0.95 - 1)));
-      renderCard('kr', krEstimated);
+      // 2-3. 코스피 지표 계산
+      const krScore = Math.min(100, Math.max(0, Math.round(usScore * 0.95 - 1)));
+
+      // 화면에 반영
+      renderCard('crypto', cryptoScore);
+      renderCard('us', usScore);
+      renderCard('kr', krScore);
+
+      // 이번 정각 시간과 함께 브라우저에 저장
+      localStorage.setItem('fgi_hourly_cache', JSON.stringify({
+        hourKey: currentHourKey,
+        crypto: cryptoScore,
+        us: usScore,
+        kr: krScore
+      }));
+
+      document.getElementById('update-status').textContent = 
+        `${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${now.getHours()}시 기준 자동 갱신 완료`;
     }
 
     loadAllData();
-    // 1시간(3600초)마다 백그라운드 자동 갱신
-    setInterval(loadAllData, 3600000);
+    // 1분(60초)마다 시간이 바뀌었는지 확인하여, 정각이 지나면 자동으로 최신 데이터 갱신
+    setInterval(loadAllData, 60000);
   </script>
 </body>
 </html>

@@ -158,7 +158,12 @@
     <header>
       <h1>공포탐욕지수</h1>
       <p class="meta-info">코스피·S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
-      <p class="meta-info" id="update-status">데이터 동기화 준비 중...</p>
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+        <p class="meta-info" id="update-status" style="margin: 0;">데이터 동기화 준비 중...</p>
+        <button id="btn-refresh" onclick="forceRefresh()" style="cursor: pointer; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 8px; font-size: 12px; color: #475569; display: inline-flex; align-items: center; gap: 4px;">
+          ↻ 새로고침
+        </button>
+      </div>
     </header>
 
     <div class="card-grid">
@@ -260,6 +265,21 @@
       return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-${now.getHours()}`;
     }
 
+    // 수동 새로고침: 캐시를 비우고 외부 데이터를 즉시 다시 호출
+    async function forceRefresh() {
+      const btn = document.getElementById('btn-refresh');
+      if (btn) {
+        btn.textContent = '갱신 중...';
+        btn.disabled = true;
+      }
+      localStorage.removeItem('fgi_hourly_cache');
+      await loadAllData();
+      if (btn) {
+        btn.textContent = '↻ 새로고침';
+        btn.disabled = false;
+      }
+    }
+    
     async function loadAllData() {
       const now = new Date();
       const currentHourKey = getCurrentHourKey();

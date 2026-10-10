@@ -16,9 +16,15 @@ def get_crypto_fgi():
 
 def get_us_fgi():
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Referer': 'https://edition.cnn.com/',
+            'Accept': 'application/json, text/plain, */*'
+        }
         res = requests.get('https://production.dataviz.cnn.io/index/fearandgreed/graphdata', headers=headers, timeout=10)
-        return round(res.json()['fear_and_greed']['score'])
+        res.raise_for_status()
+        data = res.json()
+        return round(data['fear_and_greed']['score'])
     except Exception as e:
         print(f"US FGI Error: {e}")
         return 50

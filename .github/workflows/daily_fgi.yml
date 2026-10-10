@@ -1,0 +1,38 @@
+name: Daily Fear and Greed Index Update
+
+on:
+  schedule:
+    # UTC 21:00 = 한국 시간(KST) 매일 아침 06:00
+    - cron: '0 21 * * *'
+  workflow_dispatch: # Actions 탭에서 수동 실행 가능 버튼 활성화
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 필수 패키지 설치
+        run: |
+          pip install requests yfinance
+
+      - name: 데이터 계산 및 JSON 업데이트
+        run: |
+          python update_fgi.py
+
+      - name: 변경사항 커밋 및 푸시
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          git commit -m "chore: 일일 공포탐욕지수 데이터 업데이트 [skip ci]" || echo "No changes to commit"
+          git push

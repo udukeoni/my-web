@@ -259,27 +259,12 @@
       }
     }
 
-    // 현재 '연-월-일-시' 키 생성 (예: 2026-10-9-19)
-    function getCurrentHourKey() {
-      const now = new Date();
-      return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-${now.getHours()}`;
+    // 세부 수치 표시용 함수
+    function setDetail(prefix, text) {
+      const el = document.getElementById('detail-' + prefix);
+      if (el) el.textContent = text || '';
     }
 
-    // 수동 새로고침: 캐시를 비우고 외부 데이터를 즉시 다시 호출
-    async function forceRefresh() {
-      const btn = document.getElementById('btn-refresh');
-      if (btn) {
-        btn.textContent = '갱신 중...';
-        btn.disabled = true;
-      }
-      localStorage.removeItem('fgi_hourly_cache');
-      await loadAllData();
-      if (btn) {
-        btn.textContent = '↻ 새로고침';
-        btn.disabled = false;
-      }
-    }
-    
     async function loadData() {
       const statusEl = document.getElementById('update-status');
       try {
@@ -301,9 +286,24 @@
       }
     }
 
-    loadAllData();
-    // 1분(60초)마다 시간이 바뀌었는지 확인하여, 정각이 지나면 자동으로 최신 데이터 갱신
-    setInterval(loadAllData, 60000);
+    // 새로고침 버튼 클릭 시
+    async function forceRefresh() {
+      const btn = document.getElementById('btn-refresh');
+      if (btn) {
+        btn.textContent = '갱신 중...';
+        btn.disabled = true;
+      }
+      await loadData();
+      if (btn) {
+        btn.textContent = '↻ 새로고침';
+        btn.disabled = false;
+      }
+    }
+
+    // 페이지 진입 시 실행
+    loadData();
+    // 1분마다 정적 파일 재조회
+    setInterval(loadData, 60000);
   </script>
 </body>
 </html>

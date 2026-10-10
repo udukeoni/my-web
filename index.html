@@ -17,40 +17,23 @@
       align-items: center;
     }
 
-    .container {
-      width: 100%;
-      max-width: 960px;
-    }
-
-    header {
-      margin-bottom: 25px;
-    }
-
-    h1 {
-      font-size: 30px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      margin-bottom: 8px;
-    }
-
-    .meta-info {
-      color: #64748b;
-      font-size: 14px;
-      line-height: 1.6;
-    }
+    .container { width: 100%; max-width: 960px; }
+    header { margin-bottom: 25px; }
+    h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 6px; }
+    .meta-info { color: #64748b; font-size: 14px; line-height: 1.6; }
 
     .card-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 20px;
-      margin-bottom: 25px;
+      margin-bottom: 30px;
     }
 
     .card {
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 20px;
-      padding: 26px 20px;
+      padding: 24px 20px;
       text-align: center;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
       display: flex;
@@ -58,36 +41,16 @@
       align-items: center;
     }
 
-    .card-title {
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 15px;
-    }
-
-    .gauge-box {
-      position: relative;
-      width: 220px;
-      height: 120px;
-    }
-
-    .gauge-svg {
-      width: 100%;
-      height: 100%;
-    }
-
-    .gauge-bg {
-      fill: none;
-      stroke: #f1f5f9;
-      stroke-width: 14;
-      stroke-linecap: round;
-    }
-
+    .card-title { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+    .gauge-box { position: relative; width: 220px; height: 120px; }
+    .gauge-svg { width: 100%; height: 100%; }
+    .gauge-bg { fill: none; stroke: #f1f5f9; stroke-width: 14; stroke-linecap: round; }
     .gauge-fill {
       fill: none;
       stroke-width: 14;
       stroke-linecap: round;
-      stroke-dasharray: 283;
-      stroke-dashoffset: 283;
+      stroke-dasharray: 267;
+      stroke-dashoffset: 267;
       transition: stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s;
     }
 
@@ -99,11 +62,10 @@
       height: 65px;
       background: #334155;
       transform-origin: bottom center;
-      transform: translateX(-50%) rotate(0deg);
+      transform: translateX(-50%) rotate(-90deg);
       border-radius: 2px;
       transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-
     .gauge-pointer::after {
       content: '';
       position: absolute;
@@ -115,57 +77,93 @@
       border-radius: 50%;
     }
 
-    .score-box {
-      margin-top: 15px;
+    .score-box { margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .score-num { font-size: 40px; font-weight: 800; line-height: 1; }
+    .badge { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 12px; }
+    .source-tag { margin-top: 14px; font-size: 12px; color: #64748b; }
+
+    /* AI 분석 박스 */
+    .ai-analysis-box {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    }
+    .ai-analysis-header {
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      justify-content: center;
-      gap: 8px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 10px;
+    }
+    .ai-analysis-title { font-size: 18px; font-weight: 800; }
+    .ai-analysis-summary { font-size: 15px; font-weight: 600; line-height: 1.6; margin-bottom: 12px; color: #1e293b; }
+    .ai-reason-list { list-style: none; padding-left: 0; }
+    .ai-reason-list li {
+      font-size: 13.5px;
+      color: #475569;
+      line-height: 1.7;
+      position: relative;
+      padding-left: 14px;
+      margin-bottom: 4px;
+    }
+    .ai-reason-list li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: #94a3b8;
     }
 
-    .score-num {
-      font-size: 42px;
-      font-weight: 800;
-      line-height: 1;
+    /* 8대 팩터 상세 리스트 */
+    .factor-section-title { font-size: 20px; font-weight: 800; margin-bottom: 14px; }
+    .factor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 30px;
     }
-
-    .badge {
-      font-size: 13px;
-      font-weight: 700;
-      padding: 4px 10px;
-      border-radius: 12px;
+    .factor-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
-
-    .source-tag {
-      margin-top: 18px;
-      font-size: 12px;
-      color: #64748b;
-    }
+    .factor-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .factor-name { font-size: 14px; font-weight: 700; color: #334155; }
+    .factor-score { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+    .factor-desc { font-size: 11.5px; color: #64748b; line-height: 1.4; }
 
     .summary-card {
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 16px;
-      padding: 22px;
-      font-size: 14px;
+      padding: 20px;
+      font-size: 13px;
       line-height: 1.7;
-      color: #334155;
+      color: #64748b;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>공포탐욕지수</h1>
+      <h1>글로벌 공포탐욕지수</h1>
       <p class="meta-info">코스피·S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
-      <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
         <p class="meta-info" id="update-status" style="margin: 0;">데이터 동기화 준비 중...</p>
-        <button id="btn-refresh" onclick="forceRefresh()" style="cursor: pointer; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 8px; font-size: 12px; color: #475569; display: inline-flex; align-items: center; gap: 4px;">
+        <button id="btn-refresh" onclick="forceRefresh()" style="cursor: pointer; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 8px; font-size: 12px; color: #475569;">
           ↻ 새로고침
         </button>
       </div>
     </header>
 
+    <!-- 3대 대시보드 게이지 카드 -->
     <div class="card-grid">
       <!-- 1. 코스피 -->
       <div class="card">
@@ -181,8 +179,7 @@
           <span class="score-num" id="score-kr">--</span>
           <span class="badge" id="badge-kr">대기 중</span>
         </div>
-        <div class="source-tag">모멘텀 지표 기반 자체 집계</div>
-        <div class="detail-tag" id="detail-kr" style="margin-top: 6px; font-size: 11px; color: #94a3b8; line-height: 1.5;"></div>
+        <div class="source-tag">8대 팩터 종합 산출</div>
       </div>
 
       <!-- 2. S&P 500 -->
@@ -199,7 +196,7 @@
           <span class="score-num" id="score-us">--</span>
           <span class="badge" id="badge-us">대기 중</span>
         </div>
-        <div class="source-tag">CNN 지표 연동</div>
+        <div class="source-tag">CNN 공식 지표</div>
       </div>
 
       <!-- 3. 코인 -->
@@ -216,13 +213,27 @@
           <span class="score-num" id="score-crypto">--</span>
           <span class="badge" id="badge-crypto">대기 중</span>
         </div>
-        <div class="source-tag">alternative.me 실시간</div>
+        <div class="source-tag">Alternative.me 연동</div>
       </div>
     </div>
 
+    <!-- AI 분석 및 요약 섹션 -->
+    <div class="ai-analysis-box" id="ai-box">
+      <div class="ai-analysis-header">
+        <span class="ai-analysis-title">KOSPI 종합 분석 및 요약</span>
+        <span class="badge" id="ai-badge">중립</span>
+      </div>
+      <div class="ai-analysis-summary" id="ai-summary">데이터 로딩 중...</div>
+      <ul class="ai-reason-list" id="ai-reasons"></ul>
+    </div>
+
+    <!-- 코스피 8대 팩터 카드 그리드 -->
+    <div class="factor-section-title">코스피 팩터별 세부 점수</div>
+    <div class="factor-grid" id="factor-container"></div>
+
     <div class="summary-card">
       <b>0 = 극단적 공포 · 100 = 극단적 탐욕</b><br>
-      매일 아침 자동 갱신되며, 세 시장의 온도를 함께 비교해 시장의 방향성을 가늠합니다.
+      매일 아침 자동 갱신되며, 환율, 125일 이동평균 모멘텀, 수급 및 변동성 등 다중 팩터를 종합하여 산출합니다.
     </div>
   </div>
 
@@ -260,50 +271,71 @@
       }
     }
 
-    // 세부 수치 표시용 함수
-    function setDetail(prefix, text) {
-      const el = document.getElementById('detail-' + prefix);
-      if (el) el.textContent = text || '';
+    function renderFactors(factors) {
+      const container = document.getElementById('factor-container');
+      if (!container || !factors) return;
+      container.innerHTML = '';
+
+      factors.forEach(f => {
+        const st = getStatus(f.score);
+        const card = document.createElement('div');
+        card.className = 'factor-card';
+        card.innerHTML = `
+          <div>
+            <div class="factor-top">
+              <span class="factor-name">${f.name}</span>
+              <span class="badge" style="background-color: ${st.bg}; color: ${st.color}; font-size: 11px; padding: 2px 6px;">${f.label}</span>
+            </div>
+            <div class="factor-score" style="color: ${st.color};">${f.score}</div>
+          </div>
+          <div class="factor-desc">${f.desc}</div>
+        `;
+        container.appendChild(card);
+      });
     }
 
     async function loadData() {
       const statusEl = document.getElementById('update-status');
       try {
-        // 캐시 방지를 위해 타임스탬프 쿼리 부착
         const res = await fetch(`./data.json?t=${Date.now()}`);
         if (!res.ok) throw new Error('Data not found');
         const data = await res.json();
 
-        if (data.kr != null) {
-          renderCard('kr', data.kr);
-          setDetail('kr', data.kr_detail);
-        }
+        // 3대 지표 렌더링
+        if (data.kr != null) renderCard('kr', data.kr);
         if (data.us != null) renderCard('us', data.us);
         if (data.crypto != null) renderCard('crypto', data.crypto);
 
-        statusEl.textContent = `${data.updated_at} KST 기준 데이터`;
+        // AI 요약 및 팩터 렌더링
+        if (data.kr_data) {
+          const kd = data.kr_data;
+          const st = getStatus(kd.score);
+          const aiBadge = document.getElementById('ai-badge');
+          aiBadge.textContent = kd.status;
+          aiBadge.style.backgroundColor = st.bg;
+          aiBadge.style.color = st.color;
+
+          document.getElementById('ai-summary').textContent = kd.summary;
+          const reasonsEl = document.getElementById('ai-reasons');
+          reasonsEl.innerHTML = kd.reasons.map(r => `<li>${r}</li>`).join('');
+
+          renderFactors(kd.factors);
+        }
+
+        statusEl.textContent = `${data.updated_at} KST 기준 반영 완료`;
       } catch (err) {
         statusEl.textContent = '데이터를 불러오는 데 실패했습니다.';
       }
     }
 
-    // 새로고침 버튼 클릭 시
     async function forceRefresh() {
       const btn = document.getElementById('btn-refresh');
-      if (btn) {
-        btn.textContent = '갱신 중...';
-        btn.disabled = true;
-      }
+      if (btn) { btn.textContent = '갱신 중...'; btn.disabled = true; }
       await loadData();
-      if (btn) {
-        btn.textContent = '↻ 새로고침';
-        btn.disabled = false;
-      }
+      if (btn) { btn.textContent = '↻ 새로고침'; btn.disabled = false; }
     }
 
-    // 페이지 진입 시 실행
     loadData();
-    // 1분마다 정적 파일 재조회
     setInterval(loadData, 60000);
   </script>
 </body>

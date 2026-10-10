@@ -34,5 +34,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data.json
-          git commit -m "chore: 일일 공포탐욕지수 데이터 업데이트 [skip ci]" || echo "No changes to commit"
+          git commit -m "chore: 일일 공포탐욕지수 데이터 업데이트" || echo "No changes to commit"
           git push

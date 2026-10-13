@@ -1,7 +1,7 @@
 // port/js/app.js
 
 let currentAccount = 'ALL';
-let currentView = 'HOLDINGS'; // 기본: 종목 잔고
+let currentView = 'HOLDINGS';
 
 async function fetchD1Portfolio() {
     try {
@@ -19,7 +19,7 @@ async function fetchD1Portfolio() {
             renderSummaryCard(data.summary);
         }
 
-        // 3. 메인 테이블 렌더링 (종목 잔고 또는 거래내역)
+        // 3. 메인 테이블 렌더링
         if (typeof renderDataTable === 'function') {
             const listToRender = currentView === 'HOLDINGS' ? data.holdings : data.logs;
             renderDataTable(currentView, listToRender);
@@ -61,6 +61,38 @@ function setupTabButtons() {
     });
 }
 
+// 🆕 현재가 동기화 버튼 이벤트 바인딩
+function setupSyncPriceButton() {
+    const btn = document.getElementById('btnSyncPrices');
+    const icon = document.getElementById('syncIcon');
+    if (!btn) return;
+
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        if (icon) icon.classList.add('fa-spin'); // 회전 애니메이션
+
+        try {
+            const res = await fetch('/api/sync-prices', { method: 'POST' });
+            const result = await res.json();
+
+            if (result.success) {
+                alert(`총 ${result.updatedCount}개 종목의 현재가가 최신 시세로 업데이트되었습니다.`);
+                // 업데이트된 가격으로 화면 재조회
+                await fetchD1Portfolio();
+            } else {
+                alert(`동기화 실패: ${result.error}`);
+            }
+        } catch (err) {
+            alert(`동기화 중 오류 발생: ${err.message}`);
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            if (icon) icon.classList.remove('fa-spin');
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const select = document.getElementById('selectAccount');
     if (select) {
@@ -71,5 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setupTabButtons();
+    setupSyncPriceButton();
     fetchD1Portfolio();
 });

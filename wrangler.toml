@@ -1,0 +1,7 @@
+name = "my-web"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "portfolio-db"
+database_id = "bbb7a8ae-a9bb-4bd8-a639-f63a04696070"

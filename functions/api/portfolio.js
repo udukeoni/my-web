@@ -4,9 +4,10 @@ export async function onRequestGet(context) {
     const { request, env } = context;
     const url = new URL(request.url);
     const accountFilter = url.searchParams.get('account') || 'ALL';
+    const viewType = url.searchParams.get('view') || 'HOLDINGS'; // HOLDINGS | ALL_LOGS | TRADE | DIVIDEND | TRANSFER
 
     try {
-        const db = env.DB; // wrangler.toml의 binding = "DB" 연결
+        const db = env.DB;
 
         // 1. 전체 계좌 목록 및 예수금 조회
         const accountsResult = await db.prepare(
@@ -14,7 +15,7 @@ export async function onRequestGet(context) {
         ).all();
         const accounts = accountsResult.results;
 
-        // 2. 보유 종목 리스트 및 실시간 평가/손익 계산 쿼리
+        // 2. 보유 종목 리스트 조회
         let holdingsQuery = `
             SELECT 
                 h.account_id,
@@ -42,10 +43,39 @@ export async function onRequestGet(context) {
             holdingsQuery += ` ORDER BY eval_amount DESC`;
             holdingsResult = await db.prepare(holdingsQuery).all();
         }
-
         const holdings = holdingsResult.results;
 
-        // 3. 선택된 필터에 따른 예수금 및 종합 집계
+        // 3. 거래 내역 (trade_logs) 동적 조회
+        let logConditions = [];
+        let logBindings = [];
+
+        if (accountFilter !== 'ALL') {
+            logConditions.push("account_id = ?");
+            logBindings.push(accountFilter);
+        }
+
+        if (viewType === 'TRADE') {
+            logConditions.push("trade_type IN ('매수', '매도')");
+        } else if (viewType === 'DIVIDEND') {
+            logConditions.push("trade_type IN ('배당', '분배금')");
+        } else if (viewType === 'TRANSFER') {
+            logConditions.push("trade_type IN ('입금', '출금')");
+        }
+
+        let logsQuery = `SELECT * FROM trade_logs`;
+        if (logConditions.length > 0) {
+            logsQuery += ` WHERE ` + logConditions.join(' AND ');
+        }
+        logsQuery += ` ORDER BY trade_date DESC, trade_id DESC LIMIT 100`;
+
+        let logsStmt = db.prepare(logsQuery);
+        if (logBindings.length > 0) {
+            logsStmt = logsStmt.bind(...logBindings);
+        }
+        const logsResult = await logsStmt.all();
+        const logs = logsResult.results;
+
+        // 4. 예수금 및 요약 집계
         let targetCash = 0;
         if (accountFilter === 'ALL') {
             targetCash = accounts.reduce((acc, cur) => acc + (cur.cash_balance || 0), 0);
@@ -60,7 +90,6 @@ export async function onRequestGet(context) {
         const netWorth = totalStockEval + targetCash;
         const totalProfitRate = totalInvested > 0 ? Number(((totalProfit / totalInvested) * 100).toFixed(2)) : 0;
 
-        // 4. 종목별 비중(%) 동적 산출
         const holdingsWithWeight = holdings.map(item => ({
             ...item,
             weight: totalStockEval > 0 ? Number(((item.eval_amount / totalStockEval) * 100).toFixed(2)) : 0
@@ -69,22 +98,20 @@ export async function onRequestGet(context) {
         return new Response(JSON.stringify({
             success: true,
             accountFilter,
+            viewType,
             summary: {
                 netWorth,
                 totalStockEval,
                 cashBalance: targetCash,
                 invested: totalInvested,
                 profitAmount: totalProfit,
-                profitRate: totalProfitRate,
-                annualDividend: 6537339
+                profitRate: totalProfitRate
             },
             accounts,
-            holdings: holdingsWithWeight
+            holdings: holdingsWithWeight,
+            logs
         }), {
-            headers: {
-                "Content-Type": "application/json; charset=UTF-8",
-                "Cache-Control": "no-cache"
-            }
+            headers: { "Content-Type": "application/json; charset=UTF-8", "Cache-Control": "no-cache" }
         });
 
     } catch (err) {

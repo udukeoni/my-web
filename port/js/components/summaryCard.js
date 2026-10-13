@@ -1,9 +1,5 @@
 // port/js/components/summaryCard.js
 
-/**
- * [컴포넌트 렌더링] 상단 순자산 요약 화면 (배당금 항목 제외)
- * @param {Object} data - app.js에서 넘겨주는 summary 객체
- */
 function renderSummaryCard(data) {
     const container = document.getElementById('summarySection');
     if (!container || !data) return;

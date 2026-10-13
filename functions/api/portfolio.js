@@ -88,7 +88,17 @@ export async function onRequestGet(context) {
         const totalInvested = holdings.reduce((acc, cur) => acc + (cur.buy_amount || 0), 0);
         const totalProfit = totalStockEval - totalInvested;
         const netWorth = totalStockEval + targetCash;
-        const totalProfitRate = totalInvested > 0 ? Number(((totalProfit / totalInvested) * 100).toFixed(2)) : 0;
+
+        // 1) 순수 주식 손익률 (주식 매입원가 기준)
+        const stockProfitRate = totalInvested > 0 ? Number(((totalProfit / totalInvested) * 100).toFixed(2)) : 0;
+
+        // 2) 총자산 기준 총 투자원금 (주식 원가 + 예수금)
+        const totalAssetInvested = totalInvested + targetCash;
+        // 3) 총자산 손익률 (예수금 포함 전체 원금 기준)
+        const netProfitRate = totalAssetInvested > 0 ? Number(((totalProfit / totalAssetInvested) * 100).toFixed(2)) : 0;
+
+        // 4) 예수금 비중
+        const cashWeight = netWorth > 0 ? Number(((targetCash / netWorth) * 100).toFixed(1)) : 0;
 
         const holdingsWithWeight = holdings.map(item => ({
             ...item,
@@ -105,7 +115,9 @@ export async function onRequestGet(context) {
                 cashBalance: targetCash,
                 invested: totalInvested,
                 profitAmount: totalProfit,
-                profitRate: totalProfitRate
+                stockProfitRate,      // 순수 주식 수익률
+                netProfitRate,        // 총자산 기준 수익률
+                cashWeight            // 현금 비중
             },
             accounts,
             holdings: holdingsWithWeight,

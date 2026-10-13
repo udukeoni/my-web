@@ -1,7 +1,7 @@
 // port/js/components/summaryCard.js
 
 /**
- * [컴포넌트 렌더링] 상단 순자산 요약 화면을 동적으로 그림.
+ * [컴포넌트 렌더링] 상단 순자산 요약 화면 (배당금 항목 제외)
  * @param {Object} data - app.js에서 넘겨주는 summary 객체
  */
 function renderSummaryCard(data) {
@@ -28,22 +28,18 @@ function renderSummaryCard(data) {
                 </div>
             </div>
             
-            <div class="grid grid-cols-2 gap-y-3 pt-4 mt-4 border-t border-slate-100 text-sm">
+            <div class="grid grid-cols-3 gap-2 pt-4 mt-4 border-t border-slate-100 text-sm">
                 <div>
                     <span class="text-slate-400 block mb-1 text-xs">주식 평가금</span>
-                    <span class="font-bold text-slate-800">₩${Number(data.totalStockEval || 0).toLocaleString()}</span>
+                    <span class="font-bold text-slate-800 text-xs sm:text-sm">₩${Number(data.totalStockEval || 0).toLocaleString()}</span>
                 </div>
                 <div>
                     <span class="text-slate-400 block mb-1 text-xs">예수금 (현금)</span>
-                    <span class="font-bold text-slate-800">₩${Number(data.cashBalance || 0).toLocaleString()}</span>
+                    <span class="font-bold text-slate-800 text-xs sm:text-sm">₩${Number(data.cashBalance || 0).toLocaleString()}</span>
                 </div>
                 <div>
                     <span class="text-slate-400 block mb-1 text-xs">총 매입원가</span>
-                    <span class="font-semibold text-slate-800">₩${Number(data.invested || 0).toLocaleString()}</span>
-                </div>
-                <div>
-                    <span class="text-slate-400 block mb-1 text-xs">예상 연 배당금</span>
-                    <span class="font-bold text-emerald-600">₩${Number(data.annualDividend || 0).toLocaleString()}</span>
+                    <span class="font-semibold text-slate-800 text-xs sm:text-sm">₩${Number(data.invested || 0).toLocaleString()}</span>
                 </div>
             </div>
         </div>

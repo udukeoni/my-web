@@ -43,7 +43,7 @@ export async function onRequestGet(context) {
                 (h.quantity * h.avg_buy_price) AS buy_amount,
                 (h.quantity * a.current_price) AS eval_amount,
                 ((h.quantity * a.current_price) - (h.quantity * h.avg_buy_price)) AS profit_amount,
-                ROUND(((a.current_price - h.avg_buy_price) / h.avg_buy_price) * 100, 2) AS profit_rate
+                ROUND(((a.current_price - h.avg_buy_price) * 100.0 / h.avg_buy_price), 2) AS profit_rate
             FROM holdings h
             JOIN accounts ac ON h.account_id = ac.account_id
             JOIN assets a ON h.ticker = a.ticker

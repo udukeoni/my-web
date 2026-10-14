@@ -9,11 +9,10 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
   <link rel="stylesheet" href="css/dashboard.css">
-  <!-- 🆕 반응형 트리맵 라이브러리 CDN -->
+  <!-- 차트 라이브러리 CDN -->
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <style>
     body { font-family: 'Pretendard', sans-serif; }
-    /* ApexCharts 툴팁 스타일 커스텀 */
     .apexcharts-tooltip {
       background: #1e293b !important;
       color: #ffffff !important;
@@ -42,13 +41,12 @@
           <option value="ALL">전체 계좌 종합</option>
         </select>
         
-        <!-- 공포탐욕지수 스타일의 은은한 단독 회전 아이콘 버튼 -->
         <button id="btnSyncPrices" title="현재가 수동 동기화" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-md transition active:scale-95 focus:outline-none">
           <i id="syncIcon" class="fa-solid fa-arrows-rotate text-sm"></i>
         </button>
       </div>
 
-      <!-- 뷰 모드 전환 탭 (모바일에서는 가로 스크롤 가능) -->
+      <!-- 뷰 모드 전환 탭 -->
       <div id="viewTabs" class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium overflow-x-auto">
         <button data-view="HOLDINGS" class="tab-btn px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap">종목 잔고</button>
         <button data-view="ALL_LOGS" class="tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">전체 내역</button>
@@ -58,16 +56,15 @@
       </div>
     </div>
 
-    <!-- port/portfolio.html (그리드 영역) -->
-    <!-- 순자산 요약 (4) & 비중 트리맵 영역 (8) -->
+    <!-- 순자산 요약 & 비중 트리맵 영역 (높이 동일하게 340px 맞춤) -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-      <!-- 좌측 순자산 요약 카드: 12개 중 4칸으로 축소 -->
-      <div id="summarySection" class="lg:col-span-4 h-full">
+      <!-- 좌측: 총순자산 카드 (위쪽 수치 재배치 + 아래쪽 자산추이 그래프) -->
+      <div id="summarySection" class="lg:col-span-5 h-full">
         <!-- summaryCard.js에서 동적 렌더링 -->
       </div>
 
-      <!-- 우측 자산 비중 트리맵 카드: 12개 중 8칸으로 대폭 확대 -->
-      <div class="lg:col-span-8 bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between">
+      <!-- 우측: 자산 비중 트리맵 카드 -->
+      <div class="lg:col-span-7 bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between">
         <div class="flex justify-between items-center mb-2.5">
           <div class="flex items-center gap-2">
             <span class="font-bold text-slate-800 text-sm sm:text-base">자산 비중</span>
@@ -78,12 +75,12 @@
             <button data-mode="CUMULATIVE" class="treemap-mode-btn bg-white px-2.5 py-1 rounded shadow-sm font-semibold text-slate-800 transition">누적</button>
           </div>
         </div>
-        <!-- 확장된 트리맵 마운트 영역 (높이 310px) -->
+        <!-- 확장된 트리맵 마운트 영역 -->
         <div id="treemapChart" class="w-full flex-grow min-h-[310px]"></div>
       </div>
     </div>
 
-    <!-- 메인 상세 데이터 영역 (데스크톱 테이블 + 모바일 카드 리스트) -->
+    <!-- 메인 상세 데이터 영역 -->
     <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
       <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -92,7 +89,7 @@
         </div>
       </div>
 
-      <!-- 데스크톱용 와이드 테이블 (md 이상에서만 표시) -->
+      <!-- 데스크톱용 와이드 테이블 -->
       <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-left text-sm">
           <thead id="tableHead" class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200">
@@ -105,7 +102,7 @@
         </table>
       </div>
 
-      <!-- 🆕 모바일용 카드 리스트 뷰 (md 미만 화면에서 테이블 대신 렌더링) -->
+      <!-- 모바일용 카드 리스트 뷰 -->
       <div id="mobileCardList" class="block md:hidden divide-y divide-slate-100 p-2">
         <div class="py-8 text-center text-slate-400 text-sm">데이터를 불러오는 중입니다...</div>
       </div>
@@ -114,7 +111,6 @@
 
   </main>
 
-  <!-- 컴포넌트 스크립트 -->
   <script src="js/components/summaryCard.js"></script>
   <script src="js/components/treemapChart.js"></script>
   <script src="js/components/assetListTable.js"></script>

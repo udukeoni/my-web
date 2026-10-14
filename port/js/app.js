@@ -3,6 +3,15 @@
 let currentAccount = 'ALL';
 let currentView = 'HOLDINGS';
 
+// 로컬에 캐시된 일간 등락률 가져오기
+function getStoredDailyRates() {
+    try {
+        return JSON.parse(localStorage.getItem('DAILY_RATES_CACHE') || '{}');
+    } catch (_) {
+        return {};
+    }
+}
+
 async function fetchD1Portfolio() {
     try {
         const res = await fetch(`/api/portfolio?account=${currentAccount}&view=${currentView}`);
@@ -19,14 +28,21 @@ async function fetchD1Portfolio() {
             renderSummaryCard(data.summary);
         }
 
-        // 3. 자산 비중 트리맵 차트 렌더링
+        // 3. 종목 데이터에 최신 일간 등락률 매핑
+        const dailyRatesMap = getStoredDailyRates();
+        const holdingsWithDaily = (data.holdings || []).map(h => ({
+            ...h,
+            daily_change_rate: dailyRatesMap[h.ticker] !== undefined ? dailyRatesMap[h.ticker] : (h.daily_change_rate || 0)
+        }));
+
+        // 4. 자산 비중 트리맵 차트 렌더링
         if (typeof renderTreemapChart === 'function') {
-            renderTreemapChart(data.holdings);
+            renderTreemapChart(holdingsWithDaily);
         }
 
-        // 4. 메인 테이블 및 모바일 카드 뷰 렌더링
+        // 5. 메인 테이블 및 모바일 카드 뷰 렌더링
         if (typeof renderDataTable === 'function') {
-            const listToRender = currentView === 'HOLDINGS' ? data.holdings : data.logs;
+            const listToRender = currentView === 'HOLDINGS' ? holdingsWithDaily : data.logs;
             renderDataTable(currentView, listToRender);
         }
 
@@ -70,6 +86,7 @@ function setupTabButtons() {
     });
 }
 
+// 현재가 동기화 시 일간 등락률 캐시 저장
 function setupSyncPriceButton() {
     const btn = document.getElementById('btnSyncPrices');
     const icon = document.getElementById('syncIcon');
@@ -85,7 +102,11 @@ function setupSyncPriceButton() {
             const result = await res.json();
 
             if (result.success) {
-                alert(`총 ${result.updatedCount}개 종목의 현재가가 최신 시세로 업데이트되었습니다.`);
+                // 네이버 증권의 일간 등락률 데이터를 로컬에 즉시 저장
+                if (result.dailyRates) {
+                    localStorage.setItem('DAILY_RATES_CACHE', JSON.stringify(result.dailyRates));
+                }
+                alert(`총 ${result.updatedCount}개 종목의 현재가와 일간 등락률이 최신 시세로 업데이트되었습니다.`);
                 await fetchD1Portfolio();
             } else {
                 alert(`동기화 실패: ${result.error}`);

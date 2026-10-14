@@ -19,7 +19,12 @@ async function fetchD1Portfolio() {
             renderSummaryCard(data.summary);
         }
 
-        // 3. 메인 테이블 렌더링
+        // 3. 자산 비중 트리맵 차트 렌더링
+        if (typeof renderTreemapChart === 'function') {
+            renderTreemapChart(data.holdings);
+        }
+
+        // 4. 메인 테이블 및 모바일 카드 뷰 렌더링
         if (typeof renderDataTable === 'function') {
             const listToRender = currentView === 'HOLDINGS' ? data.holdings : data.logs;
             renderDataTable(currentView, listToRender);
@@ -28,8 +33,12 @@ async function fetchD1Portfolio() {
     } catch (err) {
         console.error("D1 API 호출 에러:", err);
         const tbody = document.getElementById('tableBody');
+        const mobileList = document.getElementById('mobileCardList');
         if (tbody) {
             tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-red-500">DB 연동 오류: ${err.message}</td></tr>`;
+        }
+        if (mobileList) {
+            mobileList.innerHTML = `<div class="py-8 text-center text-red-500 text-sm">DB 연동 오류: ${err.message}</div>`;
         }
     }
 }
@@ -51,9 +60,9 @@ function setupTabButtons() {
     tabButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             tabButtons.forEach(b => {
-                b.className = 'tab-btn px-3 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800';
+                b.className = 'tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap';
             });
-            btn.className = 'tab-btn px-3 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold';
+            btn.className = 'tab-btn px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap';
 
             currentView = btn.getAttribute('data-view');
             fetchD1Portfolio();
@@ -61,7 +70,6 @@ function setupTabButtons() {
     });
 }
 
-// 🆕 현재가 동기화 버튼 이벤트 바인딩
 function setupSyncPriceButton() {
     const btn = document.getElementById('btnSyncPrices');
     const icon = document.getElementById('syncIcon');
@@ -70,7 +78,7 @@ function setupSyncPriceButton() {
     btn.addEventListener('click', async () => {
         btn.disabled = true;
         btn.classList.add('opacity-50', 'cursor-not-allowed');
-        if (icon) icon.classList.add('fa-spin'); // 회전 애니메이션
+        if (icon) icon.classList.add('fa-spin');
 
         try {
             const res = await fetch('/api/sync-prices', { method: 'POST' });
@@ -78,7 +86,6 @@ function setupSyncPriceButton() {
 
             if (result.success) {
                 alert(`총 ${result.updatedCount}개 종목의 현재가가 최신 시세로 업데이트되었습니다.`);
-                // 업데이트된 가격으로 화면 재조회
                 await fetchD1Portfolio();
             } else {
                 alert(`동기화 실패: ${result.error}`);

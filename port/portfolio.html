@@ -9,42 +9,52 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
   <link rel="stylesheet" href="css/dashboard.css">
-  <style> body { font-family: 'Pretendard', sans-serif; } </style>
+  <!-- 🆕 반응형 트리맵 라이브러리 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <style>
+    body { font-family: 'Pretendard', sans-serif; }
+    /* ApexCharts 툴팁 스타일 커스텀 */
+    .apexcharts-tooltip {
+      background: #1e293b !important;
+      color: #ffffff !important;
+      border: none !important;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-  <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
-    <h1 class="font-bold text-xl text-slate-900">자산 대시보드</h1>
+  <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+    <h1 class="font-bold text-lg sm:text-xl text-slate-900">자산 대시보드</h1>
     <nav class="flex gap-4 text-sm font-medium">
       <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition">공포탐욕지수</a>
       <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-1">내 자산 포트폴리오</a>
     </nav>
   </header>
 
-  <main class="max-w-7xl mx-auto p-6 space-y-6">
+  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
     
-    <!-- 컨트롤 바: 계좌선택 + 현재가 동기화 버튼 + 탭 그룹 -->
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-wrap items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <h2 class="font-bold text-slate-700 text-sm whitespace-nowrap">내 자산 현황</h2>
-        <select id="selectAccount" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    <!-- 컨트롤 바: 계좌선택 + 현재가 동기화 + 탭 그룹 -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <h2 class="font-bold text-slate-700 text-xs sm:text-sm whitespace-nowrap">내 자산 현황</h2>
+        <select id="selectAccount" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="ALL">전체 계좌 종합</option>
         </select>
         
-        <!-- 🆕 현재가 실시간 동기화 버튼 -->
-        <button id="btnSyncPrices" class="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition active:scale-95">
+        <button id="btnSyncPrices" class="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition active:scale-95">
           <i id="syncIcon" class="fa-solid fa-arrows-rotate"></i>
           <span>현재가 동기화</span>
         </button>
       </div>
 
-      <!-- 뷰 모드 전환 탭 버튼 그룹 -->
-      <div id="viewTabs" class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium">
-        <button data-view="HOLDINGS" class="tab-btn px-3 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold">종목 잔고</button>
-        <button data-view="ALL_LOGS" class="tab-btn px-3 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800">전체 내역</button>
-        <button data-view="TRADE" class="tab-btn px-3 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800">매수/매도</button>
-        <button data-view="DIVIDEND" class="tab-btn px-3 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800">분배/배당금</button>
-        <button data-view="TRANSFER" class="tab-btn px-3 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800">입금/출금</button>
+      <!-- 뷰 모드 전환 탭 (모바일에서는 가로 스크롤 가능) -->
+      <div id="viewTabs" class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium overflow-x-auto">
+        <button data-view="HOLDINGS" class="tab-btn px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap">종목 잔고</button>
+        <button data-view="ALL_LOGS" class="tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">전체 내역</button>
+        <button data-view="TRADE" class="tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">매수/매도</button>
+        <button data-view="DIVIDEND" class="tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">분배/배당금</button>
+        <button data-view="TRANSFER" class="tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">입금/출금</button>
       </div>
     </div>
 
@@ -54,30 +64,34 @@
         <!-- summaryCard.js에서 동적 렌더링 -->
       </div>
 
-      <div class="lg:col-span-7 bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col">
-        <div class="flex justify-between items-center mb-4">
-          <span class="font-bold text-slate-700">자산 비중 (전일 대비 -2.7%)</span>
+      <!-- 🆕 자산 비중 트리맵 카드 -->
+      <div class="lg:col-span-7 bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between">
+        <div class="flex justify-between items-center mb-3">
+          <div class="flex items-center gap-1.5">
+            <span class="font-bold text-slate-800 text-sm sm:text-base">자산 비중</span>
+            <span id="treemapSubtitle" class="text-xs text-slate-400 font-normal">주식 보유 비중</span>
+          </div>
           <div class="flex gap-1 text-xs bg-slate-100 p-1 rounded-lg">
-            <button class="bg-white px-3 py-1 rounded shadow-sm font-semibold text-slate-800">일간</button>
-            <button class="px-3 py-1 text-slate-500">누적</button>
+            <button class="bg-white px-2.5 py-1 rounded shadow-sm font-semibold text-slate-800">일간</button>
+            <button class="px-2.5 py-1 text-slate-500 hover:text-slate-700">누적</button>
           </div>
         </div>
-        <div class="flex-grow min-h-[160px] bg-slate-50 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center text-slate-400 text-sm">
-          [향후 차트 라이브러리를 통해 트리맵이 구현될 영역입니다]
-        </div>
+        <!-- 트리맵 차트 마운트 컨테이너 -->
+        <div id="treemapChart" class="w-full flex-grow min-h-[260px]"></div>
       </div>
     </div>
 
-    <!-- 메인 상세 데이터 영역 -->
+    <!-- 메인 상세 데이터 영역 (데스크톱 테이블 + 모바일 카드 리스트) -->
     <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+      <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <h3 id="tableTitle" class="font-bold text-slate-800 text-lg">보유 종목 상세</h3>
+          <h3 id="tableTitle" class="font-bold text-slate-800 text-base sm:text-lg">보유 종목 상세</h3>
           <span id="dataCountBadge" class="bg-blue-50 text-blue-600 text-xs font-semibold px-2.5 py-0.5 rounded-full">0건</span>
         </div>
       </div>
 
-      <div class="overflow-x-auto">
+      <!-- 데스크톱용 와이드 테이블 (md 이상에서만 표시) -->
+      <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-left text-sm">
           <thead id="tableHead" class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200">
           </thead>
@@ -88,11 +102,19 @@
           </tbody>
         </table>
       </div>
+
+      <!-- 🆕 모바일용 카드 리스트 뷰 (md 미만 화면에서 테이블 대신 렌더링) -->
+      <div id="mobileCardList" class="block md:hidden divide-y divide-slate-100 p-2">
+        <div class="py-8 text-center text-slate-400 text-sm">데이터를 불러오는 중입니다...</div>
+      </div>
+
     </div>
 
   </main>
 
+  <!-- 컴포넌트 스크립트 -->
   <script src="js/components/summaryCard.js"></script>
+  <script src="js/components/treemapChart.js"></script>
   <script src="js/components/assetListTable.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -58,26 +58,28 @@
       </div>
     </div>
 
-    <!-- 순자산 요약 & 비중 트리맵 영역 -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div id="summarySection" class="lg:col-span-5">
+    <!-- port/portfolio.html (그리드 영역) -->
+    <!-- 순자산 요약 (4) & 비중 트리맵 영역 (8) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+      <!-- 좌측 순자산 요약 카드: 12개 중 4칸으로 축소 -->
+      <div id="summarySection" class="lg:col-span-4 h-full">
         <!-- summaryCard.js에서 동적 렌더링 -->
       </div>
 
-      <!-- 🆕 자산 비중 트리맵 카드 -->
-      <div class="lg:col-span-7 bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between">
-        <div class="flex justify-between items-center mb-3">
-          <div class="flex items-center gap-1.5">
+      <!-- 우측 자산 비중 트리맵 카드: 12개 중 8칸으로 대폭 확대 -->
+      <div class="lg:col-span-8 bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between">
+        <div class="flex justify-between items-center mb-2.5">
+          <div class="flex items-center gap-2">
             <span class="font-bold text-slate-800 text-sm sm:text-base">자산 비중</span>
             <span id="treemapSubtitle" class="text-xs text-slate-400 font-normal">주식 보유 비중</span>
           </div>
-          <div class="flex gap-1 text-xs bg-slate-100 p-1 rounded-lg">
-            <button class="bg-white px-2.5 py-1 rounded shadow-sm font-semibold text-slate-800">일간</button>
-            <button class="px-2.5 py-1 text-slate-500 hover:text-slate-700">누적</button>
+          <div id="treemapModeTabs" class="flex gap-1 text-xs bg-slate-100 p-1 rounded-lg">
+            <button data-mode="DAILY" class="treemap-mode-btn px-2.5 py-1 rounded text-slate-500 hover:text-slate-800 transition">일간</button>
+            <button data-mode="CUMULATIVE" class="treemap-mode-btn bg-white px-2.5 py-1 rounded shadow-sm font-semibold text-slate-800 transition">누적</button>
           </div>
         </div>
-        <!-- 트리맵 차트 마운트 컨테이너 -->
-        <div id="treemapChart" class="w-full flex-grow min-h-[260px]"></div>
+        <!-- 확장된 트리맵 마운트 영역 (높이 310px) -->
+        <div id="treemapChart" class="w-full flex-grow min-h-[310px]"></div>
       </div>
     </div>
 

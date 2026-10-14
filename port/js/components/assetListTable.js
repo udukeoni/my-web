@@ -114,13 +114,13 @@ function renderDataTable(viewType, dataList) {
         if (title) title.textContent = titles[viewType] || '원장 거래 내역';
         if (badge) badge.textContent = `${dataList ? dataList.length : 0}건`;
 
-        // (1) 데스크톱 헤더
+        // 🆕 요청하신 순서: 1.거래일자 2.계좌 3.구분 4.종목 ...
         thead.innerHTML = `
             <tr>
               <th class="py-3.5 px-4">거래일자</th>
-              <th class="py-3.5 px-4">구분</th>
               <th class="py-3.5 px-4">계좌</th>
-              <th class="py-3.5 px-4">종목코드 / 대상ID</th>
+              <th class="py-3.5 px-4">구분</th>
+              <th class="py-3.5 px-4">종목</th>
               <th class="py-3.5 px-4 text-right">수량</th>
               <th class="py-3.5 px-4 text-right">단가</th>
               <th class="py-3.5 px-4 text-right">정산금액</th>
@@ -135,7 +135,7 @@ function renderDataTable(viewType, dataList) {
             return;
         }
 
-        // (2) 데스크톱 본문
+        // 데스크톱 테이블 본문
         tbody.innerHTML = dataList.map(item => {
             let badgeStyle = "bg-slate-100 text-slate-700";
             if (item.trade_type === '매수') badgeStyle = "bg-red-50 text-red-600";
@@ -145,21 +145,22 @@ function renderDataTable(viewType, dataList) {
             if (item.trade_type === '입금') badgeStyle = "bg-purple-50 text-purple-600";
             if (item.trade_type === '출금') badgeStyle = "bg-gray-100 text-gray-600";
 
-            let tickerDisplay = `<span class="font-bold text-slate-800">${item.ticker}</span>`;
-            if (item.ticker === 'CASH') {
-                tickerDisplay = `<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-xs font-bold tracking-wider">CASH</span>`;
-            } else if (item.trade_type === '이자') {
-                tickerDisplay = `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-mono text-xs font-semibold">${item.ticker}</span>`;
-            }
+            // 종목명 한글 처리 (현금은 '원화 현금', 이자는 계좌명 표기)
+            let itemDisplayName = item.display_asset_name || item.ticker;
+            if (item.ticker === 'CASH') itemDisplayName = '원화 현금';
+            else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
 
             return `
                 <tr class="hover:bg-slate-50 transition border-b border-slate-100">
                   <td class="py-3.5 px-4 font-mono text-xs text-slate-600">${item.trade_date}</td>
+                  <td class="py-3.5 px-4 text-xs font-semibold text-slate-800">${item.account_name || item.account_id}</td>
                   <td class="py-3.5 px-4">
                     <span class="px-2 py-0.5 rounded text-xs font-semibold ${badgeStyle}">${item.trade_type}</span>
                   </td>
-                  <td class="py-3.5 px-4 text-xs font-medium text-slate-700">${item.account_id}</td>
-                  <td class="py-3.5 px-4">${tickerDisplay}</td>
+                  <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-900">${itemDisplayName}</div>
+                    ${item.ticker !== 'CASH' && item.trade_type !== '이자' ? `<div class="text-[10px] text-slate-400 font-mono">${item.ticker}</div>` : ''}
+                  </td>
                   <td class="py-3.5 px-4 text-right">${item.quantity ? Number(item.quantity).toLocaleString() + '주' : '-'}</td>
                   <td class="py-3.5 px-4 text-right">${item.unit_price ? '₩' + Number(item.unit_price).toLocaleString() : '-'}</td>
                   <td class="py-3.5 px-4 text-right font-bold text-slate-900">₩${Number(item.settle_amount || 0).toLocaleString()}</td>
@@ -169,7 +170,7 @@ function renderDataTable(viewType, dataList) {
             `;
         }).join('');
 
-        // (3) 모바일 원장 카드 뷰
+        // 모바일 카드 뷰
         mobileList.innerHTML = dataList.map(item => {
             let badgeStyle = "bg-slate-100 text-slate-700";
             if (item.trade_type === '매수') badgeStyle = "bg-red-50 text-red-600";
@@ -178,17 +179,21 @@ function renderDataTable(viewType, dataList) {
             if (item.trade_type === '이자') badgeStyle = "bg-amber-50 text-amber-700";
             if (item.trade_type === '입금') badgeStyle = "bg-purple-50 text-purple-600";
 
+            let itemDisplayName = item.display_asset_name || item.ticker;
+            if (item.ticker === 'CASH') itemDisplayName = '원화 현금';
+            else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
+
             return `
                 <div class="p-3.5 bg-white rounded-xl border border-slate-100 shadow-sm mb-2 text-xs">
                     <div class="flex justify-between items-center mb-1.5">
                         <div class="flex items-center gap-1.5">
+                            <span class="font-bold text-slate-800">${item.account_name || item.account_id}</span>
                             <span class="px-2 py-0.5 rounded font-bold ${badgeStyle}">${item.trade_type}</span>
-                            <span class="font-bold text-slate-800">${item.ticker}</span>
                         </div>
                         <div class="font-mono text-slate-400">${item.trade_date}</div>
                     </div>
                     <div class="flex justify-between items-center font-medium my-1">
-                        <span class="text-slate-500">${item.account_id}</span>
+                        <span class="font-bold text-slate-900 text-sm">${itemDisplayName}</span>
                         <span class="text-sm font-extrabold text-slate-900">₩${Number(item.settle_amount || 0).toLocaleString()}</span>
                     </div>
                     <div class="text-[11px] text-slate-400 flex justify-between pt-1 border-t border-slate-50">

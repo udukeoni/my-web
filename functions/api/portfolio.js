@@ -3,85 +3,125 @@
 export async function onRequestGet(context) {
     const { request, env } = context;
     const url = new URL(request.url);
+    
     const accountFilter = url.searchParams.get('account') || 'ALL';
-    const viewType = url.searchParams.get('view') || 'HOLDINGS'; // HOLDINGS | ALL_LOGS | TRADE | DIVIDEND | TRANSFER
+    const viewType = url.searchParams.get('view') || 'HOLDINGS';
 
     try {
         const db = env.DB;
 
-        // 1. 전체 계좌 목록 및 예수금 조회
-        const accountsResult = await db.prepare(
-            `SELECT account_id, account_name, broker, account_type, cash_balance FROM accounts`
-        ).all();
-        const accounts = accountsResult.results;
+        // 1. 전체 계좌 목록 조회 (created_at 제거 -> account_id로 안전 정렬)
+        const accountsResult = await db.prepare("SELECT * FROM accounts ORDER BY account_id ASC").all();
+        const accounts = accountsResult.results || [];
 
-        // 2. 보유 종목 리스트 조회
+        // 계좌 ID -> 한글명 맵핑 사전
+        const accountNameMap = {};
+        accounts.forEach(a => {
+            if (a.account_id) accountNameMap[a.account_id] = a.account_name;
+        });
+
+        // 2. 전체 종목 마스터 조회 (종목코드 -> 한글명 맵핑 사전)
+        const assetsResult = await db.prepare("SELECT ticker, asset_name FROM assets").all();
+        const assetNameMap = {};
+        (assetsResult.results || []).forEach(ast => {
+            if (ast.ticker) assetNameMap[ast.ticker] = ast.asset_name;
+        });
+
+        // 3. 보유 종목 상세 조회
         let holdingsQuery = `
             SELECT 
+                h.holding_id,
                 h.account_id,
-                a.account_name,
+                ac.account_name,
                 h.ticker,
-                ast.asset_name,
-                ast.sector,
+                a.asset_name,
+                a.sector,
                 h.quantity,
                 h.avg_buy_price,
-                ast.current_price,
-                (h.quantity * ast.current_price) AS eval_amount,
+                a.current_price,
+                0 AS daily_change_rate,
                 (h.quantity * h.avg_buy_price) AS buy_amount,
-                ((h.quantity * ast.current_price) - (h.quantity * h.avg_buy_price)) AS profit_amount,
-                ROUND(CAST((ast.current_price - h.avg_buy_price) AS REAL) / h.avg_buy_price * 100, 2) AS profit_rate
+                (h.quantity * a.current_price) AS eval_amount,
+                ((h.quantity * a.current_price) - (h.quantity * h.avg_buy_price)) AS profit_amount,
+                ROUND(((a.current_price - h.avg_buy_price) / h.avg_buy_price) * 100, 2) AS profit_rate
             FROM holdings h
-            JOIN accounts a ON h.account_id = a.account_id
-            JOIN assets ast ON h.ticker = ast.ticker
+            JOIN accounts ac ON h.account_id = ac.account_id
+            JOIN assets a ON h.ticker = a.ticker
         `;
 
-        let holdingsResult;
+        const holdingsParams = [];
         if (accountFilter !== 'ALL') {
-            holdingsQuery += ` WHERE h.account_id = ? ORDER BY eval_amount DESC`;
-            holdingsResult = await db.prepare(holdingsQuery).bind(accountFilter).all();
-        } else {
-            holdingsQuery += ` ORDER BY eval_amount DESC`;
-            holdingsResult = await db.prepare(holdingsQuery).all();
+            holdingsQuery += " WHERE h.account_id = ?";
+            holdingsParams.push(accountFilter);
         }
-        const holdings = holdingsResult.results;
+        holdingsQuery += " ORDER BY eval_amount DESC";
 
-        // 3. 거래 내역 (trade_logs) 동적 조회
-        let logConditions = [];
-        let logBindings = [];
+        const holdingsStmt = db.prepare(holdingsQuery);
+        const holdingsResult = holdingsParams.length > 0 
+            ? await holdingsStmt.bind(...holdingsParams).all() 
+            : await holdingsStmt.all();
+        const holdings = holdingsResult.results || [];
+
+        // 4. 거래원장 (trade_logs) 안전 조회
+        let rawLogs = [];
+        let logQuery = "SELECT * FROM trade_logs";
+        const logConditions = [];
+        const logParams = [];
 
         if (accountFilter !== 'ALL') {
             logConditions.push("account_id = ?");
-            logBindings.push(accountFilter);
+            logParams.push(accountFilter);
         }
 
         if (viewType === 'TRADE') {
             logConditions.push("trade_type IN ('매수', '매도')");
         } else if (viewType === 'DIVIDEND') {
-            logConditions.push("trade_type IN ('배당', '분배금')");
+            logConditions.push("trade_type = '분배금'");
         } else if (viewType === 'TRANSFER') {
-            logConditions.push("trade_type IN ('입금', '출금')");
+            logConditions.push("trade_type IN ('입금', '출금', '이자')");
         }
 
-        let logsQuery = `SELECT * FROM trade_logs`;
         if (logConditions.length > 0) {
-            logsQuery += ` WHERE ` + logConditions.join(' AND ');
+            logQuery += " WHERE " + logConditions.join(" AND ");
         }
-        logsQuery += ` ORDER BY trade_date DESC, trade_id DESC LIMIT 100`;
+        logQuery += " ORDER BY trade_date DESC LIMIT 1000";
 
-        let logsStmt = db.prepare(logsQuery);
-        if (logBindings.length > 0) {
-            logsStmt = logsStmt.bind(...logBindings);
+        try {
+            const logStmt = db.prepare(logQuery);
+            const logResult = logParams.length > 0 
+                ? await logStmt.bind(...logParams).all() 
+                : await logStmt.all();
+            rawLogs = logResult.results || [];
+        } catch (logErr) {
+            console.error("trade_logs 조회 예외:", logErr.message);
+            rawLogs = [];
         }
-        const logsResult = await logsStmt.all();
-        const logs = logsResult.results;
 
-        // 4. 예수금 및 요약 집계
+        // 안전한 한글명 매핑
+        const logs = rawLogs.map(item => {
+            const accName = accountNameMap[item.account_id] || item.account_id || '계좌';
+            let displayAssetName = assetNameMap[item.ticker] || item.ticker || '-';
+
+            if (item.ticker === 'CASH') {
+                displayAssetName = '원화 현금';
+            } else if (item.trade_type === '이자') {
+                displayAssetName = `${accName} 이자`;
+            }
+
+            return {
+                ...item,
+                account_name: accName,
+                display_asset_name: displayAssetName
+            };
+        });
+
+        // 5. 예수금 및 요약 집계
         let targetCash = 0;
         if (accountFilter === 'ALL') {
             targetCash = accounts.reduce((acc, cur) => acc + (cur.cash_balance || 0), 0);
         } else {
             const foundAcc = accounts.find(a => a.account_id === accountFilter);
-            targetCash = foundAcc ? foundAcc.cash_balance : 0;
+            targetCash = foundAcc ? (foundAcc.cash_balance || 0) : 0;
         }
 
         const totalStockEval = holdings.reduce((acc, cur) => acc + (cur.eval_amount || 0), 0);
@@ -89,15 +129,9 @@ export async function onRequestGet(context) {
         const totalProfit = totalStockEval - totalInvested;
         const netWorth = totalStockEval + targetCash;
 
-        // 1) 순수 주식 손익률 (주식 매입원가 기준)
         const stockProfitRate = totalInvested > 0 ? Number(((totalProfit / totalInvested) * 100).toFixed(2)) : 0;
-
-        // 2) 총자산 기준 총 투자원금 (주식 원가 + 예수금)
         const totalAssetInvested = totalInvested + targetCash;
-        // 3) 총자산 손익률 (예수금 포함 전체 원금 기준)
         const netProfitRate = totalAssetInvested > 0 ? Number(((totalProfit / totalAssetInvested) * 100).toFixed(2)) : 0;
-
-        // 4) 예수금 비중
         const cashWeight = netWorth > 0 ? Number(((targetCash / netWorth) * 100).toFixed(1)) : 0;
 
         const holdingsWithWeight = holdings.map(item => ({
@@ -115,9 +149,9 @@ export async function onRequestGet(context) {
                 cashBalance: targetCash,
                 invested: totalInvested,
                 profitAmount: totalProfit,
-                stockProfitRate,      // 순수 주식 수익률
-                netProfitRate,        // 총자산 기준 수익률
-                cashWeight            // 현금 비중
+                stockProfitRate,
+                netProfitRate,
+                cashWeight
             },
             accounts,
             holdings: holdingsWithWeight,
@@ -128,7 +162,7 @@ export async function onRequestGet(context) {
 
     } catch (err) {
         return new Response(JSON.stringify({ success: false, error: err.message }), {
-            status: 500,
+            status: 200,
             headers: { "Content-Type": "application/json; charset=UTF-8" }
         });
     }

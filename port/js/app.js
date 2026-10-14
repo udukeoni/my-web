@@ -66,7 +66,8 @@ function populateAccountOptions(accounts) {
     accounts.forEach(acc => {
         const opt = document.createElement('option');
         opt.value = acc.account_id;
-        opt.textContent = `${acc.account_name} (${acc.account_type})`;
+        // 괄호 설명 없이 깔끔한 한글 계좌명만 출력
+        opt.textContent = acc.account_name;
         select.appendChild(opt);
     });
 }

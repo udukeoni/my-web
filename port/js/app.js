@@ -86,7 +86,7 @@ function setupTabButtons() {
     });
 }
 
-// 현재가 동기화 시 일간 등락률 캐시 저장
+// 현재가 동기화 버튼 이벤트 바인딩 (alert 팝업 없이 부드럽게 처리)
 function setupSyncPriceButton() {
     const btn = document.getElementById('btnSyncPrices');
     const icon = document.getElementById('syncIcon');
@@ -94,29 +94,23 @@ function setupSyncPriceButton() {
 
     btn.addEventListener('click', async () => {
         btn.disabled = true;
-        btn.classList.add('opacity-50', 'cursor-not-allowed');
-        if (icon) icon.classList.add('fa-spin');
+        if (icon) icon.classList.add('fa-spin', 'text-blue-500');
 
         try {
             const res = await fetch('/api/sync-prices', { method: 'POST' });
             const result = await res.json();
 
             if (result.success) {
-                // 네이버 증권의 일간 등락률 데이터를 로컬에 즉시 저장
                 if (result.dailyRates) {
                     localStorage.setItem('DAILY_RATES_CACHE', JSON.stringify(result.dailyRates));
                 }
-                alert(`총 ${result.updatedCount}개 종목의 현재가와 일간 등락률이 최신 시세로 업데이트되었습니다.`);
                 await fetchD1Portfolio();
-            } else {
-                alert(`동기화 실패: ${result.error}`);
             }
         } catch (err) {
-            alert(`동기화 중 오류 발생: ${err.message}`);
+            console.error("동기화 중 오류:", err);
         } finally {
             btn.disabled = false;
-            btn.classList.remove('opacity-50', 'cursor-not-allowed');
-            if (icon) icon.classList.remove('fa-spin');
+            if (icon) icon.classList.remove('fa-spin', 'text-blue-500');
         }
     });
 }

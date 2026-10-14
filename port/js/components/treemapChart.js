@@ -2,6 +2,7 @@
 
 let lastTreemapHoldings = null;
 let currentTreemapMode = 'CUMULATIVE'; // 'CUMULATIVE'(누적) | 'DAILY'(일간)
+let tooltipHideTimeout = null;
 
 // ETF 브랜드 접두사 축약 함수
 function shortenAssetName(name, width) {
@@ -19,13 +20,24 @@ function shortenAssetName(name, width) {
     return s.trim() || name;
 }
 
-// 0.01초 즉시 반응 플로팅 툴팁 엘리먼트 생성
+// 스크롤 상호작용 및 닫기 지원 툴팁 생성
 function getOrCreateTooltip() {
     let tip = document.getElementById('treemapInstantTooltip');
     if (!tip) {
         tip = document.createElement('div');
         tip.id = 'treemapInstantTooltip';
-        tip.className = 'fixed z-[9999] pointer-events-none hidden bg-slate-900/95 text-white px-3.5 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs backdrop-blur-sm max-w-xs';
+        // pointer-events-auto로 설정하여 툴팁 내부 스크롤 허용
+        tip.className = 'fixed z-[9999] hidden bg-slate-900/95 text-white px-3.5 py-2.5 rounded-xl shadow-2xl border border-slate-700 text-xs backdrop-blur-sm w-72 pointer-events-auto select-none';
+        
+        // 마우스가 툴팁 내부로 들어갔을 때는 툴팁 유지
+        tip.addEventListener('mouseenter', () => {
+            if (tooltipHideTimeout) clearTimeout(tooltipHideTimeout);
+        });
+        // 툴팁 밖으로 나가면 닫기
+        tip.addEventListener('mouseleave', () => {
+            tip.classList.add('hidden');
+        });
+
         document.body.appendChild(tip);
     }
     return tip;
@@ -100,7 +112,6 @@ function renderTreemapChart(holdings) {
         }
     });
 
-    // 묶을 소액 종목이 1개 이하면 그냥 개별 표시, 2개 이상이면 '기타' 타일 생성
     if (minorItems.length === 1) {
         mainItems.push(minorItems[0]);
     } else if (minorItems.length > 1) {
@@ -110,7 +121,6 @@ function renderTreemapChart(holdings) {
         const etcCumRate = etcBuy > 0 ? Number(((etcProfit / etcBuy) * 100).toFixed(2)) : 0;
         const etcWeight = Number(((etcEval / totalEval) * 100).toFixed(1));
         
-        // 일간 등락률 가중평균 계산
         const etcDailyRate = etcEval > 0 
             ? Number((minorItems.reduce((s, i) => s + (i.dailyRate * i.evalAmount), 0) / etcEval).toFixed(2))
             : 0;
@@ -129,7 +139,7 @@ function renderTreemapChart(holdings) {
             weight: etcWeight,
             value: etcEval,
             isEtc: true,
-            subItems: minorItems // 팝업 툴팁에 뿌려줄 소액 종목 목록
+            subItems: minorItems // 이름과 비중만 보여줄 소액 종목 목록
         });
     }
 
@@ -234,88 +244,141 @@ function renderTreemapChart(holdings) {
 
     container.innerHTML = `<div class="relative w-full h-[310px] overflow-hidden rounded-lg">${tilesHtml}</div>`;
 
-    // 5. 툴팁 팝업 연결 (기타 타일의 경우 하위 종목 리스트까지 렌더링)
+    // 5. 툴팁 팝업 렌더링 함수
     const tooltip = getOrCreateTooltip();
-    const tileElements = container.querySelectorAll('.treemap-tile');
 
-    tileElements.forEach(tile => {
-        tile.addEventListener('mouseenter', () => {
-            const idx = Number(tile.getAttribute('data-idx'));
-            const item = rects[idx];
-            if (!item) return;
+    function showTooltipForItem(item, clientX, clientY, isFixed = false) {
+        if (!item) return;
+        if (tooltipHideTimeout) clearTimeout(tooltipHideTimeout);
 
-            const cumSign = item.cumRate >= 0 ? '+' : '';
-            const cumColor = item.cumRate >= 0 ? 'text-rose-400' : 'text-sky-400';
-            const dailySign = item.dailyRate >= 0 ? '+' : '';
-            const dailyColor = item.dailyRate >= 0 ? 'text-rose-400' : 'text-sky-400';
+        const cumSign = item.cumRate >= 0 ? '+' : '';
+        const cumColor = item.cumRate >= 0 ? 'text-rose-400' : 'text-sky-400';
+        const dailySign = item.dailyRate >= 0 ? '+' : '';
+        const dailyColor = item.dailyRate >= 0 ? 'text-rose-400' : 'text-sky-400';
 
-            if (item.isEtc) {
-                // 기타 묶음 타일 전용 팝업 렌더링 (합계 + 하위 종목 리스트)
-                const subListHtml = item.subItems.map(sub => {
-                    const sSign = sub.cumRate >= 0 ? '+' : '';
-                    const sColor = sub.cumRate >= 0 ? 'text-rose-400' : 'text-sky-400';
-                    return `
-                        <div class="flex justify-between items-center py-0.5 text-[10px] border-b border-slate-800/80">
-                            <span class="truncate max-w-[130px] text-slate-300">${sub.name}</span>
-                            <div class="text-right">
-                                <span class="text-slate-400 mr-1.5">₩${Number(sub.evalAmount).toLocaleString()}</span>
-                                <span class="font-bold ${sColor}">${sSign}${sub.cumRate}%</span>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+        if (item.isEtc) {
+            // 하단 내역: 종목명과 주식 내 비중(%)만 깔끔하게 표시
+            const subListHtml = item.subItems.map(sub => `
+                <div class="flex justify-between items-center py-1 text-[11px] border-b border-slate-800/80 last:border-b-0 hover:bg-slate-800/40 px-1 rounded transition">
+                    <span class="truncate max-w-[170px] text-slate-200">${sub.name}</span>
+                    <span class="font-bold text-slate-400 text-right">${sub.weight}%</span>
+                </div>
+            `).join('');
 
-                tooltip.innerHTML = `
-                    <div class="font-bold text-amber-300 text-xs mb-1.5 border-b border-slate-700 pb-1 flex justify-between">
-                        <span>${item.name} 합계</span>
-                        <span>비중 ${item.weight}%</span>
-                    </div>
-                    <div class="space-y-0.5 text-[11px] mb-2 bg-slate-800/60 p-1.5 rounded">
-                        <div class="flex justify-between"><span class="text-slate-400">총 평가금액</span><span class="font-bold text-white">₩${Number(item.evalAmount).toLocaleString()}</span></div>
-                        <div class="flex justify-between"><span class="text-slate-400">누적 수익률</span><span class="font-bold ${cumColor}">${cumSign}${item.cumRate}% (${cumSign}₩${Number(item.profitAmount).toLocaleString()})</span></div>
-                        <div class="flex justify-between"><span class="text-slate-400">일간 등락률</span><span class="font-bold ${dailyColor}">${dailySign}${Number(item.dailyRate).toFixed(2)}%</span></div>
-                    </div>
-                    <div class="text-[10px] text-slate-400 font-semibold mb-1">포함된 종목 내역:</div>
-                    <div class="max-h-36 overflow-y-auto space-y-0.5 pr-0.5">
-                        ${subListHtml}
-                    </div>
-                `;
-            } else {
-                // 단일 개별 종목 팝업
-                tooltip.innerHTML = `
-                    <div class="font-bold text-white text-xs mb-1.5 border-b border-slate-700 pb-1">${item.name} <span class="text-slate-400 font-normal">(${item.ticker})</span></div>
-                    <div class="space-y-1 text-[11px]">
-                        <div class="flex justify-between gap-5"><span class="text-slate-400">평가금액</span><span class="font-bold text-white">₩${Number(item.evalAmount).toLocaleString()}</span></div>
-                        <div class="flex justify-between gap-5"><span class="text-slate-400">주식 내 비중</span><span class="font-semibold text-white">${item.weight}%</span></div>
-                        <div class="flex justify-between gap-5"><span class="text-slate-400">누적 수익률</span><span class="font-bold ${cumColor}">${cumSign}${item.cumRate}% (${cumSign}₩${Number(item.profitAmount).toLocaleString()})</span></div>
-                        <div class="flex justify-between gap-5"><span class="text-slate-400">일간 등락률</span><span class="font-bold ${dailyColor}">${dailySign}${Number(item.dailyRate).toFixed(2)}%</span></div>
-                    </div>
-                `;
+            tooltip.innerHTML = `
+                <div class="font-bold text-amber-300 text-xs mb-1.5 border-b border-slate-700 pb-1.5 flex justify-between items-center">
+                    <span>${item.name} 합계 (비중 ${item.weight}%)</span>
+                    <button id="btnTooltipClose" class="text-slate-400 hover:text-white px-1 text-sm leading-none">✕</button>
+                </div>
+                <div class="space-y-1 text-[11px] mb-2 bg-slate-800/70 p-2 rounded-lg">
+                    <div class="flex justify-between"><span class="text-slate-400">총 평가금액</span><span class="font-bold text-white">₩${Number(item.evalAmount).toLocaleString()}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">누적 수익률</span><span class="font-bold ${cumColor}">${cumSign}${item.cumRate}% (${cumSign}₩${Number(item.profitAmount).toLocaleString()})</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">일간 등락률</span><span class="font-bold ${dailyColor}">${dailySign}${Number(item.dailyRate).toFixed(2)}%</span></div>
+                </div>
+                <div class="flex justify-between text-[11px] text-slate-400 font-semibold mb-1 px-1 border-b border-slate-700/60 pb-0.5">
+                    <span>종목명</span>
+                    <span>비중</span>
+                </div>
+                <div id="tooltipScrollContainer" class="max-h-40 overflow-y-auto space-y-0.5 pr-1 overscroll-contain">
+                    ${subListHtml}
+                </div>
+            `;
+
+            // 모바일 및 고정 모달용 닫기 버튼 이벤트
+            const btnClose = tooltip.querySelector('#btnTooltipClose');
+            if (btnClose) {
+                btnClose.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    tooltip.classList.add('hidden');
+                });
             }
 
-            tooltip.classList.remove('hidden');
+            // 모바일 터치 스크롤 시 뒷배경이 따라 움직이지 않도록 내부 전파 차단
+            const scrollBox = tooltip.querySelector('#tooltipScrollContainer');
+            if (scrollBox) {
+                scrollBox.addEventListener('touchmove', (e) => {
+                    e.stopPropagation();
+                }, { passive: false });
+            }
+
+        } else {
+            // 일반 단일 종목 툴팁
+            tooltip.innerHTML = `
+                <div class="font-bold text-white text-xs mb-1.5 border-b border-slate-700 pb-1">${item.name} <span class="text-slate-400 font-normal">(${item.ticker})</span></div>
+                <div class="space-y-1 text-[11px]">
+                    <div class="flex justify-between gap-5"><span class="text-slate-400">평가금액</span><span class="font-bold text-white">₩${Number(item.evalAmount).toLocaleString()}</span></div>
+                    <div class="flex justify-between gap-5"><span class="text-slate-400">주식 내 비중</span><span class="font-semibold text-white">${item.weight}%</span></div>
+                    <div class="flex justify-between gap-5"><span class="text-slate-400">누적 수익률</span><span class="font-bold ${cumColor}">${cumSign}${item.cumRate}% (${cumSign}₩${Number(item.profitAmount).toLocaleString()})</span></div>
+                    <div class="flex justify-between gap-5"><span class="text-slate-400">일간 등락률</span><span class="font-bold ${dailyColor}">${dailySign}${Number(item.dailyRate).toFixed(2)}%</span></div>
+                </div>
+            `;
+        }
+
+        // 팝업 위치 잡기 (화면 벗어남 방지)
+        let left = clientX + 12;
+        let top = clientY + 12;
+
+        if (left + 300 > window.innerWidth) left = window.innerWidth - 310;
+        if (top + 280 > window.innerHeight) top = window.innerHeight - 290;
+        if (left < 10) left = 10;
+        if (top < 10) top = 10;
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+        tooltip.classList.remove('hidden');
+    }
+
+    // 타일별 이벤트 리스너 연결
+    const tileElements = container.querySelectorAll('.treemap-tile');
+    tileElements.forEach(tile => {
+        const idx = Number(tile.getAttribute('data-idx'));
+        const item = rects[idx];
+        if (!item) return;
+
+        // 1) 마우스 진입 (PC)
+        tile.addEventListener('mouseenter', (e) => {
+            showTooltipForItem(item, e.clientX, e.clientY);
         });
 
+        // 2) 마우스 이동 (PC: 툴팁으로 이동할 수 있도록 위치 고정 유지)
         tile.addEventListener('mousemove', (e) => {
-            const offset = 14;
-            let left = e.clientX + offset;
-            let top = e.clientY + offset;
-
-            // 팝업이 화면 밖으로 벗어나지 않도록 방어
-            if (left + 260 > window.innerWidth) left = e.clientX - 260;
-            if (top + 220 > window.innerHeight) top = e.clientY - 200;
-
-            tooltip.style.left = `${left}px`;
-            tooltip.style.top = `${top}px`;
+            if (!item.isEtc) {
+                let left = e.clientX + 14;
+                let top = e.clientY + 14;
+                if (left + 230 > window.innerWidth) left = e.clientX - 230;
+                if (top + 130 > window.innerHeight) top = e.clientY - 130;
+                tooltip.style.left = `${left}px`;
+                tooltip.style.top = `${top}px`;
+            }
         });
 
+        // 3) 마우스 떠남 (PC: 마우스가 툴팁으로 이동할 시간을 0.2초 제공)
         tile.addEventListener('mouseleave', () => {
-            tooltip.classList.add('hidden');
+            if (item.isEtc) {
+                tooltipHideTimeout = setTimeout(() => {
+                    tooltip.classList.add('hidden');
+                }, 220);
+            } else {
+                tooltip.classList.add('hidden');
+            }
         });
+
+        // 4) 클릭 및 터치 (모바일 & PC 클릭 고정)
+        tile.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showTooltipForItem(item, e.clientX || window.innerWidth / 2 - 140, e.clientY || 150, true);
+        });
+    });
+
+    // 바탕화면 클릭 시 팝업 닫기
+    document.addEventListener('click', (e) => {
+        if (!tooltip.contains(e.target) && !e.target.closest('.treemap-tile')) {
+            tooltip.classList.add('hidden');
+        }
     });
 }
 
-// [일간 / 누적] 탭 전환 이벤트 리스너 등록
+// [일간 / 누적] 탭 전환 이벤트 리스너
 function setupTreemapModeTabs() {
     const buttons = document.querySelectorAll('.treemap-mode-btn');
     if (!buttons.length) return;
@@ -337,7 +400,6 @@ function setupTreemapModeTabs() {
 
 document.addEventListener('DOMContentLoaded', setupTreemapModeTabs);
 
-// 창 크기 변경 시 비율 자동 재계산
 window.addEventListener('resize', () => {
     if (lastTreemapHoldings) {
         renderTreemapChart(lastTreemapHoldings);

@@ -6,7 +6,7 @@ let currentTreemapMode = 'CUMULATIVE'; // 'CUMULATIVE'(누적) | 'DAILY'(일간)
 // ETF 브랜드 접두사 축약 함수
 function shortenAssetName(name, width) {
     if (!name) return '';
-    if (width >= 115) return name; // 타일이 넓으면 원래 이름 그대로 출력
+    if (width >= 115) return name;
 
     let s = name.replace(/^(KODEX|TIGER|RISE|SOL|ACE|TIMEFOLIO|TIME|KIWOOM|HANARO|PLUS|WON)\s+/i, '');
     if (width < 80) {
@@ -25,7 +25,7 @@ function getOrCreateTooltip() {
     if (!tip) {
         tip = document.createElement('div');
         tip.id = 'treemapInstantTooltip';
-        tip.className = 'fixed z-[9999] pointer-events-none hidden bg-slate-900/95 text-white px-3.5 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs backdrop-blur-sm';
+        tip.className = 'fixed z-[9999] pointer-events-none hidden bg-slate-900/95 text-white px-3.5 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs backdrop-blur-sm max-w-xs';
         document.body.appendChild(tip);
     }
     return tip;
@@ -54,7 +54,7 @@ function renderTreemapChart(holdings) {
     const totalEval = holdings.reduce((sum, h) => sum + (h.eval_amount || 0), 0);
     if (totalEval <= 0) return;
 
-    // 1. 중복 종목 합산 및 정렬
+    // 1. 중복 종목 합산
     const mergedMap = new Map();
     holdings.forEach(h => {
         const key = h.ticker || h.asset_name;
@@ -72,7 +72,7 @@ function renderTreemapChart(holdings) {
         item.buyAmount += (h.buy_amount || 0);
     });
 
-    const allItems = Array.from(mergedMap.values()).map(item => {
+    const allSorted = Array.from(mergedMap.values()).map(item => {
         const profit = item.evalAmount - item.buyAmount;
         const cumRate = item.buyAmount > 0 ? Number(((profit / item.buyAmount) * 100).toFixed(2)) : 0;
         const weight = Number(((item.evalAmount / totalEval) * 100).toFixed(1));
@@ -84,11 +84,56 @@ function renderTreemapChart(holdings) {
             targetRate,
             profitAmount: profit,
             weight,
-            value: Math.max(item.evalAmount, totalEval * 0.012)
+            value: item.evalAmount
         };
     }).sort((a, b) => b.evalAmount - a.evalAmount);
 
-    // 2. 가로 8칸에 맞춘 넉넉한 310px 높이 분할 계산
+    // 2. 비중 1.5% 미만 극소형 종목만 '기타' 타일로 스마트 그룹화
+    const mainItems = [];
+    const minorItems = [];
+
+    allSorted.forEach(item => {
+        if (item.weight >= 1.5) {
+            mainItems.push(item);
+        } else {
+            minorItems.push(item);
+        }
+    });
+
+    // 묶을 소액 종목이 1개 이하면 그냥 개별 표시, 2개 이상이면 '기타' 타일 생성
+    if (minorItems.length === 1) {
+        mainItems.push(minorItems[0]);
+    } else if (minorItems.length > 1) {
+        const etcEval = minorItems.reduce((s, i) => s + i.evalAmount, 0);
+        const etcBuy = minorItems.reduce((s, i) => s + i.buyAmount, 0);
+        const etcProfit = etcEval - etcBuy;
+        const etcCumRate = etcBuy > 0 ? Number(((etcProfit / etcBuy) * 100).toFixed(2)) : 0;
+        const etcWeight = Number(((etcEval / totalEval) * 100).toFixed(1));
+        
+        // 일간 등락률 가중평균 계산
+        const etcDailyRate = etcEval > 0 
+            ? Number((minorItems.reduce((s, i) => s + (i.dailyRate * i.evalAmount), 0) / etcEval).toFixed(2))
+            : 0;
+
+        const targetRate = currentTreemapMode === 'DAILY' ? etcDailyRate : etcCumRate;
+
+        mainItems.push({
+            ticker: 'ETC',
+            name: `기타 ${minorItems.length}개`,
+            evalAmount: etcEval,
+            buyAmount: etcBuy,
+            profitAmount: etcProfit,
+            cumRate: etcCumRate,
+            dailyRate: etcDailyRate,
+            targetRate: targetRate,
+            weight: etcWeight,
+            value: etcEval,
+            isEtc: true,
+            subItems: minorItems // 팝업 툴팁에 뿌려줄 소액 종목 목록
+        });
+    }
+
+    // 3. 분할 계산 (너비 800px, 높이 310px)
     const width = container.clientWidth || 800;
     const height = 310;
 
@@ -124,9 +169,9 @@ function renderTreemapChart(holdings) {
         }
     }
 
-    partition(allItems, 0, 0, width, height);
+    partition(mainItems, 0, 0, width, height);
 
-    // 3. 타일 렌더링
+    // 4. 타일 렌더링
     const tilesHtml = rects.map((r, index) => {
         const isPos = r.targetRate > 0;
         const isZero = r.targetRate === 0;
@@ -134,7 +179,10 @@ function renderTreemapChart(holdings) {
         let bgClass = 'bg-[#edf6ff] hover:bg-[#dbeafe]';
         let rateColor = 'text-[#1b64da]';
 
-        if (isPos) {
+        if (r.isEtc) {
+            bgClass = 'bg-slate-100 hover:bg-slate-200';
+            rateColor = isPos ? 'text-[#e11d48]' : (isZero ? 'text-slate-600' : 'text-[#1b64da]');
+        } else if (isPos) {
             bgClass = 'bg-[#fff0f2] hover:bg-[#ffe4e8]';
             rateColor = 'text-[#e11d48]';
         } else if (isZero) {
@@ -162,7 +210,7 @@ function renderTreemapChart(holdings) {
             padClass = 'p-1.5';
         }
 
-        const displayName = shortenAssetName(r.name, r.w);
+        const displayName = r.isEtc ? r.name : shortenAssetName(r.name, r.w);
         const showRate = r.h >= 28 && r.w >= 36;
         const showWeight = r.h >= 46 && r.w >= 46;
 
@@ -186,7 +234,7 @@ function renderTreemapChart(holdings) {
 
     container.innerHTML = `<div class="relative w-full h-[310px] overflow-hidden rounded-lg">${tilesHtml}</div>`;
 
-    // 4. 초고속 상세 툴팁 연결
+    // 5. 툴팁 팝업 연결 (기타 타일의 경우 하위 종목 리스트까지 렌더링)
     const tooltip = getOrCreateTooltip();
     const tileElements = container.querySelectorAll('.treemap-tile');
 
@@ -201,15 +249,50 @@ function renderTreemapChart(holdings) {
             const dailySign = item.dailyRate >= 0 ? '+' : '';
             const dailyColor = item.dailyRate >= 0 ? 'text-rose-400' : 'text-sky-400';
 
-            tooltip.innerHTML = `
-                <div class="font-bold text-white text-xs mb-1.5 border-b border-slate-700 pb-1">${item.name} <span class="text-slate-400 font-normal">(${item.ticker})</span></div>
-                <div class="space-y-1 text-[11px]">
-                    <div class="flex justify-between gap-5"><span class="text-slate-400">평가금액</span><span class="font-bold text-white">₩${Number(item.evalAmount).toLocaleString()}</span></div>
-                    <div class="flex justify-between gap-5"><span class="text-slate-400">주식 내 비중</span><span class="font-semibold text-white">${item.weight}%</span></div>
-                    <div class="flex justify-between gap-5"><span class="text-slate-400">누적 수익률</span><span class="font-bold ${cumColor}">${cumSign}${item.cumRate}% (${cumSign}₩${Number(item.profitAmount).toLocaleString()})</span></div>
-                    <div class="flex justify-between gap-5"><span class="text-slate-400">일간 등락률</span><span class="font-bold ${dailyColor}">${dailySign}${Number(item.dailyRate).toFixed(2)}%</span></div>
-                </div>
-            `;
+            if (item.isEtc) {
+                // 기타 묶음 타일 전용 팝업 렌더링 (합계 + 하위 종목 리스트)
+                const subListHtml = item.subItems.map(sub => {
+                    const sSign = sub.cumRate >= 0 ? '+' : '';
+                    const sColor = sub.cumRate >= 0 ? 'text-rose-400' : 'text-sky-400';
+                    return `
+                        <div class="flex justify-between items-center py-0.5 text-[10px] border-b border-slate-800/80">
+                            <span class="truncate max-w-[130px] text-slate-300">${sub.name}</span>
+                            <div class="text-right">
+                                <span class="text-slate-400 mr-1.5">₩${Number(sub.evalAmount).toLocaleString()}</span>
+                                <span class="font-bold ${sColor}">${sSign}${sub.cumRate}%</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                tooltip.innerHTML = `
+                    <div class="font-bold text-amber-300 text-xs mb-1.5 border-b border-slate-700 pb-1 flex justify-between">
+                        <span>${item.name} 합계</span>
+                        <span>비중 ${item.weight}%</span>
+                    </div>
+                    <div class="space-y-0.5 text-[11px] mb-2 bg-slate-800/60 p-1.5 rounded">
+                        <div class="flex justify-between"><span class="text-slate-400">총 평가금액</span><span class="font-bold text-white">₩${Number(item.evalAmount).toLocaleString()}</span></div>
+                        <div class="flex justify-between"><span class="text-slate-400">누적 수익률</span><span class="font-bold ${cumColor}">${cumSign}${item.cumRate}% (${cumSign}₩${Number(item.profitAmount).toLocaleString()})</span></div>
+                        <div class="flex justify-between"><span class="text-slate-400">일간 등락률</span><span class="font-bold ${dailyColor}">${dailySign}${Number(item.dailyRate).toFixed(2)}%</span></div>
+                    </div>
+                    <div class="text-[10px] text-slate-400 font-semibold mb-1">포함된 종목 내역:</div>
+                    <div class="max-h-36 overflow-y-auto space-y-0.5 pr-0.5">
+                        ${subListHtml}
+                    </div>
+                `;
+            } else {
+                // 단일 개별 종목 팝업
+                tooltip.innerHTML = `
+                    <div class="font-bold text-white text-xs mb-1.5 border-b border-slate-700 pb-1">${item.name} <span class="text-slate-400 font-normal">(${item.ticker})</span></div>
+                    <div class="space-y-1 text-[11px]">
+                        <div class="flex justify-between gap-5"><span class="text-slate-400">평가금액</span><span class="font-bold text-white">₩${Number(item.evalAmount).toLocaleString()}</span></div>
+                        <div class="flex justify-between gap-5"><span class="text-slate-400">주식 내 비중</span><span class="font-semibold text-white">${item.weight}%</span></div>
+                        <div class="flex justify-between gap-5"><span class="text-slate-400">누적 수익률</span><span class="font-bold ${cumColor}">${cumSign}${item.cumRate}% (${cumSign}₩${Number(item.profitAmount).toLocaleString()})</span></div>
+                        <div class="flex justify-between gap-5"><span class="text-slate-400">일간 등락률</span><span class="font-bold ${dailyColor}">${dailySign}${Number(item.dailyRate).toFixed(2)}%</span></div>
+                    </div>
+                `;
+            }
+
             tooltip.classList.remove('hidden');
         });
 
@@ -218,8 +301,9 @@ function renderTreemapChart(holdings) {
             let left = e.clientX + offset;
             let top = e.clientY + offset;
 
-            if (left + 230 > window.innerWidth) left = e.clientX - 230;
-            if (top + 120 > window.innerHeight) top = e.clientY - 120;
+            // 팝업이 화면 밖으로 벗어나지 않도록 방어
+            if (left + 260 > window.innerWidth) left = e.clientX - 260;
+            if (top + 220 > window.innerHeight) top = e.clientY - 200;
 
             tooltip.style.left = `${left}px`;
             tooltip.style.top = `${top}px`;

@@ -115,5 +115,104 @@
   <script src="js/components/treemapChart.js"></script>
   <script src="js/components/assetListTable.js"></script>
   <script src="js/app.js"></script>
+
+  <!-- 거래내역 입력 팝업 모달 -->
+  <div id="txModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+      
+      <!-- 헤더 -->
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+          <i class="fa-solid fa-pen-to-square text-blue-600"></i> 거래내역 직접 입력
+        </h3>
+        <button type="button" id="btnCloseTxModal" class="text-slate-400 hover:text-slate-600 text-lg p-1 transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- 입력 폼 -->
+      <form id="txForm" class="p-6 space-y-4 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <!-- 거래일자 -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">거래일자 <span class="text-red-500">*</span></label>
+            <input type="date" id="txDate" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+
+          <!-- 계좌 콤보박스 -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">계좌 <span class="text-red-500">*</span></label>
+            <select id="txAccount" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <!-- JS에서 자동 채움 -->
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <!-- 구분 콤보박스 -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">구분 <span class="text-red-500">*</span></label>
+            <select id="txType" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+              <option value="매수">매수</option>
+              <option value="매도">매도</option>
+              <option value="분배금">분배금</option>
+              <option value="이자">이자</option>
+              <option value="입금">입금</option>
+              <option value="출금">출금</option>
+            </select>
+          </div>
+
+          <!-- 종목 콤보박스 -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">종목 <span class="text-red-500">*</span></label>
+            <select id="txStock" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <!-- JS에서 자동 채움 -->
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <!-- 수량 -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">수량 (주)</label>
+            <input type="number" id="txQuantity" min="0" placeholder="예: 10" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+          </div>
+
+          <!-- 단가 -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">단가 (원)</label>
+            <input type="number" id="txPrice" min="0" placeholder="예: 15000" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <!-- 정산금액 -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">정산금액 (원) <span class="text-red-500">*</span></label>
+            <input type="number" id="txAmount" required placeholder="예: 150000" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-blue-600">
+          </div>
+
+          <!-- 세금 / 수수료 -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">세금/수수료 (원)</label>
+            <input type="number" id="txTax" value="0" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+        </div>
+
+        <!-- 메모 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">메모</label>
+          <input type="text" id="txMemo" placeholder="예: 당일 매수, 분배금 재투자 등" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <!-- 버튼 -->
+        <div class="pt-2 flex gap-2 justify-end">
+          <button type="button" id="btnCancelTx" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium transition">취소</button>
+          <button type="submit" id="btnSubmitTx" class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold transition shadow-sm">내역 저장</button>
+        </div>
+      </form>
+
+    </div>
+  </div>
 </body>
 </html>

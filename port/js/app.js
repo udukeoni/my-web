@@ -2,6 +2,8 @@
 
 let currentAccount = 'ALL';
 let currentView = 'HOLDINGS';
+let cachedAccounts = [];
+let cachedHoldings = [];
 
 // 로컬에 캐시된 일간 등락률 가져오기
 function getStoredDailyRates() {
@@ -20,27 +22,34 @@ async function fetchD1Portfolio() {
         const data = await res.json();
         if (!data.success) throw new Error(data.error);
 
-        // 1. 계좌 선택 드롭다운 채우기
-        populateAccountOptions(data.accounts);
+        // 계좌 및 종목 캐싱 (모달 콤보박스에 사용)
+        cachedAccounts = data.accounts || [];
+        cachedHoldings = data.holdings || [];
 
-        // 2. 상단 요약 카드 렌더링
+        // 1. 계좌 선택 드롭다운 채우기
+        populateAccountOptions(cachedAccounts);
+
+        // 2. 모달창 콤보박스 채우기
+        populateModalOptions(cachedAccounts, cachedHoldings);
+
+        // 3. 상단 요약 카드 렌더링
         if (typeof renderSummaryCard === 'function') {
             renderSummaryCard(data.summary);
         }
 
-        // 3. 종목 데이터에 최신 일간 등락률 매핑
+        // 4. 종목 데이터에 최신 일간 등락률 매핑
         const dailyRatesMap = getStoredDailyRates();
         const holdingsWithDaily = (data.holdings || []).map(h => ({
             ...h,
             daily_change_rate: dailyRatesMap[h.ticker] !== undefined ? dailyRatesMap[h.ticker] : (h.daily_change_rate || 0)
         }));
 
-        // 4. 자산 비중 트리맵 차트 렌더링
+        // 5. 자산 비중 트리맵 차트 렌더링
         if (typeof renderTreemapChart === 'function') {
             renderTreemapChart(holdingsWithDaily);
         }
 
-        // 5. 메인 테이블 및 모바일 카드 뷰 렌더링
+        // 6. 메인 테이블 및 모바일 카드 뷰 렌더링
         if (typeof renderDataTable === 'function') {
             const listToRender = currentView === 'HOLDINGS' ? holdingsWithDaily : data.logs;
             renderDataTable(currentView, listToRender);
@@ -66,10 +75,168 @@ function populateAccountOptions(accounts) {
     accounts.forEach(acc => {
         const opt = document.createElement('option');
         opt.value = acc.account_id;
-        // 괄호 설명 없이 깔끔한 한글 계좌명만 출력
         opt.textContent = acc.account_name;
         select.appendChild(opt);
     });
+}
+
+// 🆕 거래내역 모달 안의 '계좌'와 '종목' 콤보박스 채우기
+function populateModalOptions(accounts, holdings) {
+    const accountSelect = document.getElementById('txAccount');
+    const stockSelect = document.getElementById('txStock');
+
+    if (accountSelect && accountSelect.children.length === 0) {
+        accounts.forEach(acc => {
+            const opt = document.createElement('option');
+            opt.value = acc.account_id;
+            opt.textContent = acc.account_name;
+            accountSelect.appendChild(opt);
+        });
+    }
+
+    if (stockSelect && stockSelect.children.length <= 2) {
+        stockSelect.innerHTML = '';
+
+        // 기본 현금 및 이자 항목
+        const defaultOptions = [
+            { ticker: 'CASH', name: '원화 현금' },
+            { ticker: 'INTEREST', name: '이자 (예수금 이용료)' }
+        ];
+
+        defaultOptions.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.ticker;
+            opt.textContent = item.name;
+            stockSelect.appendChild(opt);
+        });
+
+        // 실제 보유 및 마스터 종목 채우기 (중복 제거)
+        const uniqueStocks = new Map();
+        holdings.forEach(h => {
+            if (h.ticker && !uniqueStocks.has(h.ticker)) {
+                uniqueStocks.set(h.ticker, h.asset_name);
+            }
+        });
+
+        uniqueStocks.forEach((name, ticker) => {
+            const opt = document.createElement('option');
+            opt.value = ticker;
+            opt.textContent = `${name} (${ticker})`;
+            stockSelect.appendChild(opt);
+        });
+    }
+}
+
+// 🆕 구분 선택 시 수량/단가 자동 비활성화 & 모달 동작 제어
+function setupTxModal() {
+    const modal = document.getElementById('txModal');
+    const btnOpen = document.getElementById('btnOpenTxModal');
+    const btnClose = document.getElementById('btnCloseTxModal');
+    const btnCancel = document.getElementById('btnCancelTx');
+    const txTypeSelect = document.getElementById('txType');
+    const txStockSelect = document.getElementById('txStock');
+    const inputQty = document.getElementById('txQuantity');
+    const inputPrice = document.getElementById('txPrice');
+    const inputDate = document.getElementById('txDate');
+    const form = document.getElementById('txForm');
+
+    // 오늘 날짜 기본 세팅 (YYYY-MM-DD)
+    if (inputDate && !inputDate.value) {
+        inputDate.value = new Date().toISOString().split('T')[0];
+    }
+
+    // 팝업 열기
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#btnOpenTxModal')) {
+            if (modal) modal.classList.remove('hidden');
+        }
+    });
+
+    // 팝업 닫기
+    const closeModal = () => {
+        if (modal) modal.classList.add('hidden');
+    };
+    if (btnClose) btnClose.addEventListener('click', closeModal);
+    if (btnCancel) btnCancel.addEventListener('click', closeModal);
+
+    // 💡 구분(콤보박스) 변경 시 수량/단가 비활성화 규칙
+    if (txTypeSelect) {
+        txTypeSelect.addEventListener('change', () => {
+            const selectedType = txTypeSelect.value;
+            const noQtyTypes = ['분배금', '이자', '입금', '출금'];
+
+            if (noQtyTypes.includes(selectedType)) {
+                // 비활성화 및 값 비우기
+                inputQty.disabled = true;
+                inputPrice.disabled = true;
+                inputQty.value = '';
+                inputPrice.value = '';
+
+                // 종목 콤보박스 추천값 자동 선택
+                if (selectedType === '이자' && txStockSelect) {
+                    txStockSelect.value = 'INTEREST';
+                } else if ((selectedType === '입금' || selectedType === '출금') && txStockSelect) {
+                    txStockSelect.value = 'CASH';
+                }
+            } else {
+                // 매수, 매도일 때는 활성화
+                inputQty.disabled = false;
+                inputPrice.disabled = false;
+            }
+        });
+    }
+
+    // 폼 제출(저장) 이벤트
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('btnSubmitTx');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = '저장 중...';
+            }
+
+            const payload = {
+                trade_date: inputDate.value,
+                account_id: document.getElementById('txAccount').value,
+                trade_type: txTypeSelect.value,
+                ticker: txStockSelect.value,
+                quantity: inputQty.value ? Number(inputQty.value) : 0,
+                unit_price: inputPrice.value ? Number(inputPrice.value) : 0,
+                settle_amount: Number(document.getElementById('txAmount').value || 0),
+                tax: Number(document.getElementById('txTax').value || 0),
+                memo: document.getElementById('txMemo').value || ''
+            };
+
+            try {
+                const res = await fetch('/api/trade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    closeModal();
+                    form.reset();
+                    // 오늘 날짜 재설정
+                    inputDate.value = new Date().toISOString().split('T')[0];
+                    // 화면 즉시 새로고침
+                    await fetchD1Portfolio();
+                } else {
+                    alert('저장 실패: ' + (result.error || '알 수 없는 오류'));
+                }
+            } catch (err) {
+                alert('서버 통신 오류: ' + err.message);
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '내역 저장';
+                }
+            }
+        });
+    }
 }
 
 function setupTabButtons() {
@@ -87,7 +254,6 @@ function setupTabButtons() {
     });
 }
 
-// 현재가 동기화 버튼 이벤트 바인딩 (alert 팝업 없이 부드럽게 처리)
 function setupSyncPriceButton() {
     const btn = document.getElementById('btnSyncPrices');
     const icon = document.getElementById('syncIcon');
@@ -127,5 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupTabButtons();
     setupSyncPriceButton();
+    setupTxModal();
     fetchD1Portfolio();
 });

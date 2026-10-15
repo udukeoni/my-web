@@ -9,12 +9,30 @@ function renderDataTable(viewType, dataList) {
 
     if (!thead || !tbody || !mobileList) return;
 
+    // 🆕 제목 영역 우측에 '+ 거래내역 입력' 버튼 동적 생성 및 제어
+    const headerContainer = title ? title.closest('.flex.items-center.justify-between') : null;
+    let btnOpenModal = document.getElementById('btnOpenTxModal');
+    if (headerContainer && !btnOpenModal) {
+        btnOpenModal = document.createElement('button');
+        btnOpenModal.id = 'btnOpenTxModal';
+        btnOpenModal.type = 'button';
+        btnOpenModal.className = 'hidden items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition shadow-sm active:scale-95';
+        btnOpenModal.innerHTML = '<i class="fa-solid fa-plus text-[10px]"></i> 거래내역 입력';
+        headerContainer.appendChild(btnOpenModal);
+    }
+
     // ==========================================
     // 1. 보유 종목 (HOLDINGS) 뷰
     // ==========================================
     if (viewType === 'HOLDINGS') {
         if (title) title.textContent = '보유 종목 상세';
         if (badge) badge.textContent = `${dataList ? dataList.length : 0}종목`;
+
+        // 종목 잔고 탭에서는 입력 버튼 숨김
+        if (btnOpenModal) {
+            btnOpenModal.classList.add('hidden');
+            btnOpenModal.classList.remove('inline-flex');
+        }
 
         // (1) 데스크톱 테이블 헤더
         thead.innerHTML = `
@@ -64,7 +82,7 @@ function renderDataTable(viewType, dataList) {
             `;
         }).join('');
 
-        // (3) 모바일 맞춤 카드 뷰 (오른쪽 잘림 없이 100% 폭에 맞춤)
+        // (3) 모바일 맞춤 카드 뷰
         mobileList.innerHTML = dataList.map(item => {
             const isPositive = item.profit_amount >= 0;
             const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
@@ -114,7 +132,17 @@ function renderDataTable(viewType, dataList) {
         if (title) title.textContent = titles[viewType] || '원장 거래 내역';
         if (badge) badge.textContent = `${dataList ? dataList.length : 0}건`;
 
-        // 🆕 요청하신 순서: 1.거래일자 2.계좌 3.구분 4.종목 ...
+        // 🆕 '전체 내역' 탭일 때만 제목 맨 오른쪽 끝에 입력 버튼 표시
+        if (btnOpenModal) {
+            if (viewType === 'ALL_LOGS') {
+                btnOpenModal.classList.remove('hidden');
+                btnOpenModal.classList.add('inline-flex');
+            } else {
+                btnOpenModal.classList.add('hidden');
+                btnOpenModal.classList.remove('inline-flex');
+            }
+        }
+
         thead.innerHTML = `
             <tr>
               <th class="py-3.5 px-4">거래일자</th>
@@ -145,7 +173,6 @@ function renderDataTable(viewType, dataList) {
             if (item.trade_type === '입금') badgeStyle = "bg-purple-50 text-purple-600";
             if (item.trade_type === '출금') badgeStyle = "bg-gray-100 text-gray-600";
 
-            // 종목명 한글 처리 (현금은 '원화 현금', 이자는 계좌명 표기)
             let itemDisplayName = item.display_asset_name || item.ticker;
             if (item.ticker === 'CASH') itemDisplayName = '원화 현금';
             else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
@@ -164,7 +191,7 @@ function renderDataTable(viewType, dataList) {
                   <td class="py-3.5 px-4 text-right">${item.quantity ? Number(item.quantity).toLocaleString() + '주' : '-'}</td>
                   <td class="py-3.5 px-4 text-right">${item.unit_price ? '₩' + Number(item.unit_price).toLocaleString() : '-'}</td>
                   <td class="py-3.5 px-4 text-right font-bold text-slate-900">₩${Number(item.settle_amount || 0).toLocaleString()}</td>
-                  <td class="py-3.5 px-4 text-right text-xs text-slate-500">${item.tax ? '₩' + Number(item.tax).toLocaleString() : '₩0'}</td>
+                  <td class="py-3.5 px-4 text-right text-xs text-slate-500">${item.tax || item.fee ? '₩' + Number(item.tax || item.fee).toLocaleString() : '₩0'}</td>
                   <td class="py-3.5 px-4 text-xs text-slate-400">${item.memo || ''}</td>
                 </tr>
             `;
@@ -178,6 +205,7 @@ function renderDataTable(viewType, dataList) {
             if (item.trade_type === '분배금') badgeStyle = "bg-emerald-50 text-emerald-600";
             if (item.trade_type === '이자') badgeStyle = "bg-amber-50 text-amber-700";
             if (item.trade_type === '입금') badgeStyle = "bg-purple-50 text-purple-600";
+            if (item.trade_type === '출금') badgeStyle = "bg-gray-100 text-gray-600";
 
             let itemDisplayName = item.display_asset_name || item.ticker;
             if (item.ticker === 'CASH') itemDisplayName = '원화 현금';
@@ -198,7 +226,7 @@ function renderDataTable(viewType, dataList) {
                     </div>
                     <div class="text-[11px] text-slate-400 flex justify-between pt-1 border-t border-slate-50">
                         <span>${item.memo || '-'}</span>
-                        <span>${item.tax ? '세금 ₩' + Number(item.tax).toLocaleString() : ''}</span>
+                        <span>${(item.tax || item.fee) ? '세금 ₩' + Number(item.tax || item.fee).toLocaleString() : ''}</span>
                     </div>
                 </div>
             `;

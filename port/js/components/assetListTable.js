@@ -1,5 +1,8 @@
 // port/js/components/assetListTable.js
 
+// 기존 고정 데이터 번호 기준선 (233번 초과 건만 수정/삭제 허용)
+const BASE_FIXED_TRADE_ID = 233;
+
 function renderDataTable(viewType, dataList) {
     const thead = document.getElementById('tableHead');
     const tbody = document.getElementById('tableBody');
@@ -163,7 +166,7 @@ function renderDataTable(viewType, dataList) {
             let badgeStyle = "bg-slate-100 text-slate-700";
             if (item.trade_type === '매수') badgeStyle = "bg-red-50 text-red-600";
             if (item.trade_type === '매도') badgeStyle = "bg-blue-50 text-blue-600";
-            if (item.trade_type === '분배금') badgeStyle = "bg-emerald-50 text-emerald-600";
+            if (item.trade_type === '분배금' || item.trade_type === '배당금') badgeStyle = "bg-emerald-50 text-emerald-600";
             if (item.trade_type === '이자') badgeStyle = "bg-amber-50 text-amber-700";
             if (item.trade_type === '입금') badgeStyle = "bg-purple-50 text-purple-600";
             if (item.trade_type === '출금') badgeStyle = "bg-gray-100 text-gray-600";
@@ -172,13 +175,22 @@ function renderDataTable(viewType, dataList) {
             if (item.ticker === 'CASH') itemDisplayName = '원화 현금';
             else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
 
-            // 💡 출금 및 입금은 정산금액 자체가 이동 금액이므로 세금 칸은 항상 ₩0 처리
             const isTransfer = (item.trade_type === '출금' || item.trade_type === '입금');
             const taxText = isTransfer ? '₩0' : ((item.tax || item.fee) ? '₩' + Number(item.tax || item.fee).toLocaleString() : '₩0');
 
+            // 💡 직접 입력한 신규 데이터(233번 초과) 여부 판단
+            const isEditable = item.trade_id && Number(item.trade_id) > BASE_FIXED_TRADE_ID;
+            const cursorClass = isEditable ? 'cursor-pointer hover:bg-blue-50/60' : 'hover:bg-slate-50';
+            const editBadge = isEditable ? '<span class="ml-1 px-1.5 py-0.2 bg-blue-100 text-blue-700 text-[10px] rounded font-medium">수정가능</span>' : '';
+
+            // 안전한 JSON 데이터 속성 저장
+            const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
+
             return `
-                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
-                  <td class="py-3.5 px-4 font-mono text-xs text-slate-600">${item.trade_date}</td>
+                <tr class="transition border-b border-slate-100 ${cursorClass} ${isEditable ? 'tx-editable-row' : ''}" data-tx="${isEditable ? itemJson : ''}">
+                  <td class="py-3.5 px-4 font-mono text-xs text-slate-600">
+                    ${item.trade_date}${editBadge}
+                  </td>
                   <td class="py-3.5 px-4 text-xs font-semibold text-slate-800">${item.account_name || item.account_id}</td>
                   <td class="py-3.5 px-4">
                     <span class="px-2 py-0.5 rounded text-xs font-semibold ${badgeStyle}">${item.trade_type}</span>
@@ -201,7 +213,7 @@ function renderDataTable(viewType, dataList) {
             let badgeStyle = "bg-slate-100 text-slate-700";
             if (item.trade_type === '매수') badgeStyle = "bg-red-50 text-red-600";
             if (item.trade_type === '매도') badgeStyle = "bg-blue-50 text-blue-600";
-            if (item.trade_type === '분배금') badgeStyle = "bg-emerald-50 text-emerald-600";
+            if (item.trade_type === '분배금' || item.trade_type === '배당금') badgeStyle = "bg-emerald-50 text-emerald-600";
             if (item.trade_type === '이자') badgeStyle = "bg-amber-50 text-amber-700";
             if (item.trade_type === '입금') badgeStyle = "bg-purple-50 text-purple-600";
             if (item.trade_type === '출금') badgeStyle = "bg-gray-100 text-gray-600";
@@ -213,12 +225,18 @@ function renderDataTable(viewType, dataList) {
             const isTransfer = (item.trade_type === '출금' || item.trade_type === '입금');
             const mobileTaxText = (!isTransfer && (item.tax || item.fee)) ? '세금 ₩' + Number(item.tax || item.fee).toLocaleString() : '';
 
+            const isEditable = item.trade_id && Number(item.trade_id) > BASE_FIXED_TRADE_ID;
+            const cursorClass = isEditable ? 'cursor-pointer active:bg-blue-50/60' : '';
+            const editBadge = isEditable ? '<span class="ml-1 px-1.5 py-0.2 bg-blue-100 text-blue-700 text-[10px] rounded font-medium">수정가능</span>' : '';
+            const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
+
             return `
-                <div class="p-3.5 bg-white rounded-xl border border-slate-100 shadow-sm mb-2 text-xs">
+                <div class="p-3.5 bg-white rounded-xl border border-slate-100 shadow-sm mb-2 text-xs ${cursorClass} ${isEditable ? 'tx-editable-row' : ''}" data-tx="${isEditable ? itemJson : ''}">
                     <div class="flex justify-between items-center mb-1.5">
                         <div class="flex items-center gap-1.5">
                             <span class="font-bold text-slate-800">${item.account_name || item.account_id}</span>
                             <span class="px-2 py-0.5 rounded font-bold ${badgeStyle}">${item.trade_type}</span>
+                            ${editBadge}
                         </div>
                         <div class="font-mono text-slate-400">${item.trade_date}</div>
                     </div>

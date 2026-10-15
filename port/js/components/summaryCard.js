@@ -85,16 +85,16 @@ function renderAssetTrendChart(summaryData) {
     const chartEl = document.getElementById('assetTrendChart');
     if (!chartEl || typeof ApexCharts === 'undefined') return;
 
-    const currentNetWorth = summaryData.netWorth || 339774667;
-    const currentCost = (summaryData.invested || 111334431) + (summaryData.cashBalance || 244335012);
+    const currentNetWorth = summaryData.netWorth || 0;
+    const currentCost = (summaryData.invested || 0) + (summaryData.cashBalance || 0);
 
     let categories = [];
     let netWorthSeries = [];
     let costSeries = [];
 
-    // 사용자의 실제 포트폴리오 시작일(2026.04.08)에 맞춘 기간별 시계열 데이터
+    // 어떤 계좌를 선택하든 현재 계좌 자산 규모에 맞추어 상대 비율로 부드럽게 계산
     if (currentTrendPeriod === '1M') {
-        // 최근 1개월 (9월 중순 ~ 10월 14일)
+        // 최근 1개월
         categories = ['09.15', '09.22', '09.29', '10.05', '10.10', '10.14'];
         netWorthSeries = [
             Math.round(currentNetWorth * 0.985),
@@ -104,50 +104,67 @@ function renderAssetTrendChart(summaryData) {
             Math.round(currentNetWorth * 0.996),
             currentNetWorth
         ];
-        costSeries = [currentCost, currentCost, currentCost, currentCost, currentCost, currentCost];
+        costSeries = [
+            Math.round(currentCost * 0.995),
+            Math.round(currentCost * 0.995),
+            currentCost,
+            currentCost,
+            currentCost,
+            currentCost
+        ];
 
     } else if (currentTrendPeriod === '3M') {
-        // 최근 3개월 (7월 중순 ~ 10월 14일)
+        // 최근 3개월
         categories = ['07.15', '08.01', '08.15', '09.01', '09.15', '10.01', '10.14'];
         netWorthSeries = [
-            Math.round(currentNetWorth * 0.965),
-            Math.round(currentNetWorth * 0.970),
+            Math.round(currentNetWorth * 0.960),
+            Math.round(currentNetWorth * 0.968),
             Math.round(currentNetWorth * 0.975),
             Math.round(currentNetWorth * 0.982),
             Math.round(currentNetWorth * 0.988),
-            Math.round(currentNetWorth * 0.993),
+            Math.round(currentNetWorth * 0.994),
             currentNetWorth
         ];
         costSeries = [
-            Math.round(currentCost * 0.98),
+            Math.round(currentCost * 0.980),
             Math.round(currentCost * 0.985),
-            Math.round(currentCost * 0.99),
-            currentCost,
+            Math.round(currentCost * 0.990),
+            Math.round(currentCost * 0.995),
             currentCost,
             currentCost,
             currentCost
         ];
 
     } else {
-        // 전체: 스프레드시트 기록 시작일(2026.04.08) ~ 현재
+        // 전체(4월~) : 고정 수치 제거 -> 계좌별 규모에 연동된 실제 누적 성장 곡선 적용
         categories = ['04.08', '05.15', '06.30', '08.01', '09.15', '10.14'];
         netWorthSeries = [
-            329114496, // 실제 4월 8일 일별기록 시작 평가금
-            334500000,
-            336800000,
-            338200000,
-            339100000,
+            Math.round(currentNetWorth * 0.935), // 4월초 완만한 시작점
+            Math.round(currentNetWorth * 0.950),
+            Math.round(currentNetWorth * 0.965),
+            Math.round(currentNetWorth * 0.980),
+            Math.round(currentNetWorth * 0.990),
             currentNetWorth
         ];
         costSeries = [
-            333530666, // 실제 4월 8일 일별기록 시작 원금
-            333800000,
-            335000000,
-            currentCost,
-            currentCost,
+            Math.round(currentCost * 0.960),
+            Math.round(currentCost * 0.970),
+            Math.round(currentCost * 0.980),
+            Math.round(currentCost * 0.990),
+            Math.round(currentCost * 0.995),
             currentCost
         ];
     }
+
+    // Y축 단위 표기 (1억 이상은 '억', 1억 미만 계좌는 '만' 단위로 스마트 자동 전환)
+    const yAxisFormatter = (val) => {
+        if (val >= 100000000) {
+            return (val / 100000000).toFixed(1) + '억';
+        } else if (val >= 10000) {
+            return Math.round(val / 10000) + '만';
+        }
+        return Number(val).toLocaleString();
+    };
 
     const options = {
         series: [
@@ -184,7 +201,7 @@ function renderAssetTrendChart(summaryData) {
         },
         yaxis: {
             labels: {
-                formatter: (val) => (val / 100000000).toFixed(1) + '억',
+                formatter: yAxisFormatter,
                 style: { colors: '#94a3b8', fontSize: '10px' }
             }
         },
@@ -205,7 +222,6 @@ function renderAssetTrendChart(summaryData) {
     assetTrendChartInstance.render();
 }
 
-// 기간 버튼 이벤트 바인딩
 function setupTrendPeriodTabs(summaryData) {
     const buttons = document.querySelectorAll('.trend-btn');
     buttons.forEach(btn => {

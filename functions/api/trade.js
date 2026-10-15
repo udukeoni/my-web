@@ -1,6 +1,6 @@
 // functions/api/trade.js
 
-const BASE_FIXED_TRADE_ID = 233; // 초기 고정 데이터 보호선
+const BASE_FIXED_TRADE_ID = 433; // 초기 고정 데이터 보호선
 
 // 자산 증감(현금 흐름) 계산 함수
 function calculateDeltaCash(tradeType, settleAmount, tax) {

@@ -1,7 +1,7 @@
 // port/js/components/assetListTable.js
 
-// 기존 고정 데이터 번호 기준선 (233번 초과 건만 수정/삭제 허용)
-const BASE_FIXED_TRADE_ID = 233;
+// 기존 고정 데이터 번호 기준선 (433번 초과 건만 수정/삭제 허용)
+const BASE_FIXED_TRADE_ID = 433;
 
 function renderDataTable(viewType, dataList) {
     const thead = document.getElementById('tableHead');

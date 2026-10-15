@@ -19,65 +19,39 @@
   </style>
 </head>
 <body class="p-4 md:p-8 text-slate-800">
-  <!-- 전체 폭을 넉넉하게 잡는 컨테이너 -->
-  <div class="max-w-6xl mx-auto w-full">
+  <div class="max-w-5xl mx-auto w-full">
     
     <!-- 1. 헤더 영역 -->
     <header class="flex flex-col md:flex-row md:items-end justify-between mb-8 pb-4 border-b border-slate-200">
       <div>
         <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">시장 공포탐욕지수</h1>
-        <p class="text-slate-500 mt-1">코스피·S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
+        <p class="text-slate-500 mt-1">S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
       </div>
       
-      <!-- 우측 컨트롤: 시간, 새로고침, 은밀한 자산 포트폴리오 아이콘 -->
+      <!-- 우측 컨트롤: 시간, 새로고침, 포트폴리오 링크 -->
       <div class="mt-4 md:mt-0 flex items-center gap-2 text-sm text-slate-500 font-medium">
         <span id="updated-at" class="mr-2 text-slate-400">데이터 로딩 중...</span>
         
-        <!-- 수동 새로고침 버튼 -->
-        <button onclick="fetchData()" class="p-1.5 hover:bg-slate-100 rounded-lg transition" title="새로고침">
-          <i class="fa-solid fa-arrows-rotate text-slate-400 hover:text-slate-600"></i>
+        <button id="btn-sync" onclick="handleManualSync()" class="p-1.5 hover:bg-slate-100 rounded-lg transition" title="실시간 현재가 동기화">
+          <i id="sync-icon" class="fa-solid fa-arrows-rotate text-slate-400 hover:text-slate-600"></i>
         </button>
 
-        <!-- 은밀한 포트폴리오 링크 (지갑 아이콘, 기본 투명도 20%) -->
-        <a href="port/portfolio.html" class="p-1.5 opacity-20 hover:opacity-100 hover:bg-slate-100 rounded-lg transition ml-1" title="자산 관리">
+        <a href="port/portfolio.html" class="p-1.5 opacity-30 hover:opacity-100 hover:bg-slate-100 rounded-lg transition ml-1" title="자산 관리">
           <i class="fa-solid fa-wallet text-slate-400 hover:text-blue-600"></i>
         </a>
       </div>
     </header>
 
-    <!-- 2. 지수 카드 그리드 (3열 고정) -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <!-- 2. 지수 카드 그리드 (2열 듀얼 배치) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
       
-      <!-- [카드 1] 코스피 -->
-      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col items-center">
-        <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 mb-2">KOSPI</span>
-        <h2 class="text-lg font-bold text-slate-700 mb-4">코스피</h2>
-
-        <div class="relative w-[200px] h-[105px] overflow-hidden flex justify-center">
-          <svg viewBox="0 0 200 100" class="w-[200px] h-[100px]">
-            <path d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="#f1f5f9" stroke-width="14" stroke-linecap="round"/>
-            <path id="kr-arc" d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="#f97316" stroke-width="14" stroke-linecap="round"
-                  stroke-dasharray="251.3" stroke-dashoffset="251.3" class="gauge-arc"/>
-            <circle cx="100" cy="90" r="5" fill="#334155"/>
-            <line id="kr-needle" x1="100" y1="90" x2="100" y2="25" stroke="#334155" stroke-width="3" stroke-linecap="round"
-                  class="gauge-needle" style="transform: rotate(-90deg);"/>
-          </svg>
-        </div>
-
-        <div class="text-4xl font-black mt-2 text-slate-900" id="kr-score">--</div>
-        <span id="kr-status" class="mt-2 text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700">중립</span>
-        <a href="kospi_factors.html" class="mt-5 text-sm font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline">
-          8대 팩터 종합 산출 <i class="fa-solid fa-chevron-right text-xs"></i>
-        </a>
-      </div>
-
-      <!-- [카드 2] S&P500 -->
-      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col items-center">
+      <!-- [카드 1] S&P500 (D1 DB CNN 공식 연동) -->
+      <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 flex flex-col items-center">
         <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-50 text-red-600 mb-2">S&P 500</span>
-        <h2 class="text-lg font-bold text-slate-700 mb-4">S&P500</h2>
+        <h2 class="text-xl font-bold text-slate-800 mb-4">S&P 500</h2>
 
-        <div class="relative w-[200px] h-[105px] overflow-hidden flex justify-center">
-          <svg viewBox="0 0 200 100" class="w-[200px] h-[100px]">
+        <div class="relative w-[220px] h-[115px] overflow-hidden flex justify-center">
+          <svg viewBox="0 0 200 100" class="w-[220px] h-[110px]">
             <path d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="#f1f5f9" stroke-width="14" stroke-linecap="round"/>
             <path id="us-arc" d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="#eab308" stroke-width="14" stroke-linecap="round"
                   stroke-dasharray="251.3" stroke-dashoffset="251.3" class="gauge-arc"/>
@@ -87,18 +61,18 @@
           </svg>
         </div>
 
-        <div class="text-4xl font-black mt-2 text-slate-900" id="us-score">--</div>
-        <span id="us-status" class="mt-2 text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700">중립</span>
-        <p class="mt-5 text-xs text-slate-400">CNN 공식 지표</p>
+        <div class="text-5xl font-black mt-3 text-slate-900" id="us-score">--</div>
+        <span id="us-status" class="mt-2.5 text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700">중립</span>
+        <p class="mt-6 text-xs text-slate-400">CNN 공식 실시간 지표 (D1 연동)</p>
       </div>
 
-      <!-- [카드 3] 코인 (BTC/ETH) -->
-      <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col items-center">
-        <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 mb-2">BTC/ETH</span>
-        <h2 class="text-lg font-bold text-slate-700 mb-4">코인</h2>
+      <!-- [카드 2] 코인 (BTC/ETH) -->
+      <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 flex flex-col items-center">
+        <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 mb-2">BTC / ETH</span>
+        <h2 class="text-xl font-bold text-slate-800 mb-4">가상자산 (코인)</h2>
 
-        <div class="relative w-[200px] h-[105px] overflow-hidden flex justify-center">
-          <svg viewBox="0 0 200 100" class="w-[200px] h-[100px]">
+        <div class="relative w-[220px] h-[115px] overflow-hidden flex justify-center">
+          <svg viewBox="0 0 200 100" class="w-[220px] h-[110px]">
             <path d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="#f1f5f9" stroke-width="14" stroke-linecap="round"/>
             <path id="crypto-arc" d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="#22c55e" stroke-width="14" stroke-linecap="round"
                   stroke-dasharray="251.3" stroke-dashoffset="251.3" class="gauge-arc"/>
@@ -108,16 +82,16 @@
           </svg>
         </div>
 
-        <div class="text-4xl font-black mt-2 text-slate-900" id="crypto-score">--</div>
-        <span id="crypto-status" class="mt-2 text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">탐욕</span>
-        <p class="mt-5 text-xs text-slate-400">Alternative.me 연동</p>
+        <div class="text-5xl font-black mt-3 text-slate-900" id="crypto-score">--</div>
+        <span id="crypto-status" class="mt-2.5 text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">탐욕</span>
+        <p class="mt-6 text-xs text-slate-400">Alternative.me 글로벌 크립토 지수</p>
       </div>
 
     </div>
   </div>
 
   <script>
-    const ARC_LENGTH = 251.3; // Math.PI * 80
+    const ARC_LENGTH = 251.3;
 
     function getTheme(score) {
       if (score <= 24) return { label: '극단적 공포', color: '#ef4444', bg: 'bg-red-100', text: 'text-red-700' };
@@ -139,7 +113,7 @@
       if (scoreEl) scoreEl.textContent = Math.round(score);
       if (statusEl) {
         statusEl.textContent = displayStatus;
-        statusEl.className = `mt-2 text-xs font-bold px-3 py-1 rounded-full ${theme.bg} ${theme.text}`;
+        statusEl.className = `mt-2.5 text-xs font-bold px-3 py-1 rounded-full ${theme.bg} ${theme.text}`;
       }
 
       if (arcEl) {
@@ -156,32 +130,61 @@
 
     async function fetchData() {
       try {
-        // 캐시 방지 파라미터(?t=...) 유지
-        const res = await fetch(`data.json?t=${Date.now()}`);
-        if (!res.ok) throw new Error(`data.json 요청 실패 (상태 코드: ${res.status})`);
-        
-        const data = await res.json();
+        // 1. D1 DB에서 최신 S&P 500 공포탐욕지수 조회
+        const res = await fetch(`/api/fgi?t=${Date.now()}`);
+        if (!res.ok) throw new Error(`D1 API 응답 오류: ${res.status}`);
+        const fgiData = await res.json();
 
-        // 1. 시간 업데이트
+        // 2. 시간 업데이트
         const updatedAtEl = document.getElementById('updated-at');
         if (updatedAtEl) {
-          updatedAtEl.textContent = data.updated_at ? `${data.updated_at} KST 기준 반영 완료` : '반영 완료';
+          const dateStr = fgiData.date || new Date().toISOString().slice(0, 10);
+          updatedAtEl.textContent = `${dateStr} 기준 반영 완료`;
+          updatedAtEl.classList.remove('text-rose-500');
         }
 
-        // 2. 게이지 업데이트
-        const krScore = data.kr_data?.score ?? data.kr ?? 50;
-        const krStatus = data.kr_data?.status;
-        updateGauge('kr', krScore, krStatus);
-        updateGauge('us', data.us ?? 50);
-        updateGauge('crypto', data.crypto ?? 50);
+        // 3. S&P500 게이지 갱신 (D1 값)
+        const usScore = Number(fgiData.score ?? 50);
+        updateGauge('us', usScore);
+
+        // 4. 코인 게이지 (Alternative.me 실시간 보강)
+        try {
+          const cryptoRes = await fetch('https://api.alternative.me/fng/?limit=1');
+          if (cryptoRes.ok) {
+            const cryptoJson = await cryptoRes.json();
+            const cScore = Number(cryptoJson.data[0].value);
+            updateGauge('crypto', cScore);
+          } else {
+            updateGauge('crypto', 50);
+          }
+        } catch (_) {
+          updateGauge('crypto', 50);
+        }
 
       } catch (err) {
         console.error("데이터 로드 실패:", err);
         const updatedAtEl = document.getElementById('updated-at');
         if (updatedAtEl) {
-          updatedAtEl.textContent = '데이터를 불러올 수 없습니다 (data.json 확인)';
+          updatedAtEl.textContent = 'D1 DB 연결 확인 필요';
           updatedAtEl.classList.add('text-rose-500');
         }
+      }
+    }
+
+    async function handleManualSync() {
+      const btn = document.getElementById('btn-sync');
+      const icon = document.getElementById('sync-icon');
+      if (btn) btn.disabled = true;
+      if (icon) icon.classList.add('fa-spin', 'text-blue-500');
+
+      try {
+        await fetch('/api/sync-fgi', { method: 'POST' });
+        await fetchData();
+      } catch (err) {
+        console.error("수동 동기화 실패:", err);
+      } finally {
+        if (btn) btn.disabled = false;
+        if (icon) icon.classList.remove('fa-spin', 'text-blue-500');
       }
     }
 

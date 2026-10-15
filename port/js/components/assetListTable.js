@@ -1,6 +1,6 @@
 // port/js/components/assetListTable.js
 
-// 기존 고정 데이터 번호 기준선 (433번 초과 건만 수정/삭제 허용)
+// 기존 고정 데이터 번호 기준선 (433번까지 고정 보호, 434번부터 수정/삭제 가능)
 const BASE_FIXED_TRADE_ID = 433;
 
 function renderDataTable(viewType, dataList) {
@@ -143,14 +143,14 @@ function renderDataTable(viewType, dataList) {
 
         thead.innerHTML = `
             <tr>
-              <th class="py-3.5 px-4">거래일자</th>
-              <th class="py-3.5 px-4">계좌</th>
-              <th class="py-3.5 px-4">구분</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">거래일자</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">계좌</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">구분</th>
               <th class="py-3.5 px-4">종목</th>
-              <th class="py-3.5 px-4 text-right">수량</th>
-              <th class="py-3.5 px-4 text-right">단가</th>
-              <th class="py-3.5 px-4 text-right">정산금액</th>
-              <th class="py-3.5 px-4 text-right">세금</th>
+              <th class="py-3.5 px-4 text-right whitespace-nowrap">수량</th>
+              <th class="py-3.5 px-4 text-right whitespace-nowrap">단가</th>
+              <th class="py-3.5 px-4 text-right whitespace-nowrap">정산금액</th>
+              <th class="py-3.5 px-4 text-right whitespace-nowrap">세금</th>
               <th class="py-3.5 px-4">메모</th>
             </tr>
         `;
@@ -161,7 +161,6 @@ function renderDataTable(viewType, dataList) {
             return;
         }
 
-        // 데스크톱 테이블 본문
         tbody.innerHTML = dataList.map(item => {
             let badgeStyle = "bg-slate-100 text-slate-700";
             if (item.trade_type === '매수') badgeStyle = "bg-red-50 text-red-600";
@@ -178,31 +177,28 @@ function renderDataTable(viewType, dataList) {
             const isTransfer = (item.trade_type === '출금' || item.trade_type === '입금');
             const taxText = isTransfer ? '₩0' : ((item.tax || item.fee) ? '₩' + Number(item.tax || item.fee).toLocaleString() : '₩0');
 
-            // 💡 직접 입력한 신규 데이터(233번 초과) 여부 판단
+            // 💡 433번 초과 건만 수정/삭제 허용 (파란 글씨 뱃지는 완전히 없애고 클릭 동작만 유지)
             const isEditable = item.trade_id && Number(item.trade_id) > BASE_FIXED_TRADE_ID;
-            const cursorClass = isEditable ? 'cursor-pointer hover:bg-blue-50/60' : 'hover:bg-slate-50';
-            const editBadge = isEditable ? '<span class="ml-1 px-1.5 py-0.2 bg-blue-100 text-blue-700 text-[10px] rounded font-medium">수정가능</span>' : '';
-
-            // 안전한 JSON 데이터 속성 저장
+            const cursorClass = isEditable ? 'cursor-pointer hover:bg-blue-50/40' : 'hover:bg-slate-50';
             const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
 
             return `
                 <tr class="transition border-b border-slate-100 ${cursorClass} ${isEditable ? 'tx-editable-row' : ''}" data-tx="${isEditable ? itemJson : ''}">
-                  <td class="py-3.5 px-4 font-mono text-xs text-slate-600">
-                    ${item.trade_date}${editBadge}
+                  <td class="py-3.5 px-4 font-mono text-xs text-slate-600 whitespace-nowrap">
+                    ${item.trade_date}
                   </td>
-                  <td class="py-3.5 px-4 text-xs font-semibold text-slate-800">${item.account_name || item.account_id}</td>
-                  <td class="py-3.5 px-4">
-                    <span class="px-2 py-0.5 rounded text-xs font-semibold ${badgeStyle}">${item.trade_type}</span>
+                  <td class="py-3.5 px-4 text-xs font-semibold text-slate-800 whitespace-nowrap">${item.account_name || item.account_id}</td>
+                  <td class="py-3.5 px-4 whitespace-nowrap">
+                    <span class="px-2.5 py-0.5 rounded text-xs font-semibold whitespace-nowrap inline-block ${badgeStyle}">${item.trade_type}</span>
                   </td>
                   <td class="py-3.5 px-4">
                     <div class="font-bold text-slate-900">${itemDisplayName}</div>
                     ${item.ticker !== 'CASH' && item.trade_type !== '이자' ? `<div class="text-[10px] text-slate-400 font-mono">${item.ticker}</div>` : ''}
                   </td>
-                  <td class="py-3.5 px-4 text-right">${item.quantity ? Number(item.quantity).toLocaleString() + '주' : '-'}</td>
-                  <td class="py-3.5 px-4 text-right">${item.unit_price ? '₩' + Number(item.unit_price).toLocaleString() : '-'}</td>
-                  <td class="py-3.5 px-4 text-right font-bold text-slate-900">₩${Number(item.settle_amount || 0).toLocaleString()}</td>
-                  <td class="py-3.5 px-4 text-right text-xs text-slate-500">${taxText}</td>
+                  <td class="py-3.5 px-4 text-right whitespace-nowrap">${item.quantity ? Number(item.quantity).toLocaleString() + '주' : '-'}</td>
+                  <td class="py-3.5 px-4 text-right whitespace-nowrap">${item.unit_price ? '₩' + Number(item.unit_price).toLocaleString() : '-'}</td>
+                  <td class="py-3.5 px-4 text-right font-bold text-slate-900 whitespace-nowrap">₩${Number(item.settle_amount || 0).toLocaleString()}</td>
+                  <td class="py-3.5 px-4 text-right text-xs text-slate-500 whitespace-nowrap">${taxText}</td>
                   <td class="py-3.5 px-4 text-xs text-slate-400">${item.memo || ''}</td>
                 </tr>
             `;
@@ -226,8 +222,7 @@ function renderDataTable(viewType, dataList) {
             const mobileTaxText = (!isTransfer && (item.tax || item.fee)) ? '세금 ₩' + Number(item.tax || item.fee).toLocaleString() : '';
 
             const isEditable = item.trade_id && Number(item.trade_id) > BASE_FIXED_TRADE_ID;
-            const cursorClass = isEditable ? 'cursor-pointer active:bg-blue-50/60' : '';
-            const editBadge = isEditable ? '<span class="ml-1 px-1.5 py-0.2 bg-blue-100 text-blue-700 text-[10px] rounded font-medium">수정가능</span>' : '';
+            const cursorClass = isEditable ? 'cursor-pointer active:bg-blue-50/40' : '';
             const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
 
             return `
@@ -235,8 +230,7 @@ function renderDataTable(viewType, dataList) {
                     <div class="flex justify-between items-center mb-1.5">
                         <div class="flex items-center gap-1.5">
                             <span class="font-bold text-slate-800">${item.account_name || item.account_id}</span>
-                            <span class="px-2 py-0.5 rounded font-bold ${badgeStyle}">${item.trade_type}</span>
-                            ${editBadge}
+                            <span class="px-2 py-0.5 rounded font-bold whitespace-nowrap ${badgeStyle}">${item.trade_type}</span>
                         </div>
                         <div class="font-mono text-slate-400">${item.trade_date}</div>
                     </div>

@@ -9,7 +9,7 @@ function renderDataTable(viewType, dataList) {
 
     if (!thead || !tbody || !mobileList) return;
 
-    // 🆕 제목 영역 우측에 '+ 거래내역 입력' 버튼 동적 생성 및 제어
+    // 제목 영역 우측에 '+ 거래내역 입력' 버튼 동적 생성 및 제어
     const headerContainer = title ? title.closest('.flex.items-center.justify-between') : null;
     let btnOpenModal = document.getElementById('btnOpenTxModal');
     if (headerContainer && !btnOpenModal) {
@@ -28,13 +28,11 @@ function renderDataTable(viewType, dataList) {
         if (title) title.textContent = '보유 종목 상세';
         if (badge) badge.textContent = `${dataList ? dataList.length : 0}종목`;
 
-        // 종목 잔고 탭에서는 입력 버튼 숨김
         if (btnOpenModal) {
             btnOpenModal.classList.add('hidden');
             btnOpenModal.classList.remove('inline-flex');
         }
 
-        // (1) 데스크톱 테이블 헤더
         thead.innerHTML = `
             <tr>
               <th class="py-3.5 px-4">종목명 / 계좌</th>
@@ -53,7 +51,6 @@ function renderDataTable(viewType, dataList) {
             return;
         }
 
-        // (2) 데스크톱 테이블 본문
         tbody.innerHTML = dataList.map(item => {
             const isPositive = item.profit_amount >= 0;
             const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
@@ -82,7 +79,6 @@ function renderDataTable(viewType, dataList) {
             `;
         }).join('');
 
-        // (3) 모바일 맞춤 카드 뷰
         mobileList.innerHTML = dataList.map(item => {
             const isPositive = item.profit_amount >= 0;
             const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
@@ -132,7 +128,6 @@ function renderDataTable(viewType, dataList) {
         if (title) title.textContent = titles[viewType] || '원장 거래 내역';
         if (badge) badge.textContent = `${dataList ? dataList.length : 0}건`;
 
-        // 🆕 '전체 내역' 탭일 때만 제목 맨 오른쪽 끝에 입력 버튼 표시
         if (btnOpenModal) {
             if (viewType === 'ALL_LOGS') {
                 btnOpenModal.classList.remove('hidden');
@@ -177,6 +172,10 @@ function renderDataTable(viewType, dataList) {
             if (item.ticker === 'CASH') itemDisplayName = '원화 현금';
             else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
 
+            // 💡 출금 및 입금은 정산금액 자체가 이동 금액이므로 세금 칸은 항상 ₩0 처리
+            const isTransfer = (item.trade_type === '출금' || item.trade_type === '입금');
+            const taxText = isTransfer ? '₩0' : ((item.tax || item.fee) ? '₩' + Number(item.tax || item.fee).toLocaleString() : '₩0');
+
             return `
                 <tr class="hover:bg-slate-50 transition border-b border-slate-100">
                   <td class="py-3.5 px-4 font-mono text-xs text-slate-600">${item.trade_date}</td>
@@ -191,7 +190,7 @@ function renderDataTable(viewType, dataList) {
                   <td class="py-3.5 px-4 text-right">${item.quantity ? Number(item.quantity).toLocaleString() + '주' : '-'}</td>
                   <td class="py-3.5 px-4 text-right">${item.unit_price ? '₩' + Number(item.unit_price).toLocaleString() : '-'}</td>
                   <td class="py-3.5 px-4 text-right font-bold text-slate-900">₩${Number(item.settle_amount || 0).toLocaleString()}</td>
-                  <td class="py-3.5 px-4 text-right text-xs text-slate-500">${item.tax || item.fee ? '₩' + Number(item.tax || item.fee).toLocaleString() : '₩0'}</td>
+                  <td class="py-3.5 px-4 text-right text-xs text-slate-500">${taxText}</td>
                   <td class="py-3.5 px-4 text-xs text-slate-400">${item.memo || ''}</td>
                 </tr>
             `;
@@ -211,6 +210,9 @@ function renderDataTable(viewType, dataList) {
             if (item.ticker === 'CASH') itemDisplayName = '원화 현금';
             else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
 
+            const isTransfer = (item.trade_type === '출금' || item.trade_type === '입금');
+            const mobileTaxText = (!isTransfer && (item.tax || item.fee)) ? '세금 ₩' + Number(item.tax || item.fee).toLocaleString() : '';
+
             return `
                 <div class="p-3.5 bg-white rounded-xl border border-slate-100 shadow-sm mb-2 text-xs">
                     <div class="flex justify-between items-center mb-1.5">
@@ -226,7 +228,7 @@ function renderDataTable(viewType, dataList) {
                     </div>
                     <div class="text-[11px] text-slate-400 flex justify-between pt-1 border-t border-slate-50">
                         <span>${item.memo || '-'}</span>
-                        <span>${(item.tax || item.fee) ? '세금 ₩' + Number(item.tax || item.fee).toLocaleString() : ''}</span>
+                        <span>${mobileTaxText}</span>
                     </div>
                 </div>
             `;

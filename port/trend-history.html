@@ -14,28 +14,26 @@
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-  <!-- 헤더 -->
-  <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-50">
-    <div class="flex items-center gap-3">
-      <a href="portfolio.html" class="text-slate-400 hover:text-slate-700 transition p-1.5 rounded-lg hover:bg-slate-100 flex items-center gap-1 text-sm font-semibold">
-        <i class="fa-solid fa-arrow-left"></i> 대시보드로 복귀
+  <!-- 헤더 (모바일 줄바꿈 방지 & 콤팩트 상단바) -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <a href="portfolio.html" class="text-slate-600 hover:text-blue-600 transition flex items-center gap-1.5 text-xs sm:text-sm font-bold whitespace-nowrap py-1 px-2 rounded-lg hover:bg-slate-100 -ml-2">
+        <i class="fa-solid fa-arrow-left text-sm"></i>
+        <span>대시보드</span>
       </a>
-      <span class="text-slate-300">|</span>
-      <h1 class="font-bold text-base sm:text-lg text-slate-900">자산 변동 기록 장부</h1>
-    </div>
-    <div class="text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1 rounded-full" id="periodBadge">
-      조회 중...
+      <h1 class="font-bold text-sm sm:text-base text-slate-900 whitespace-nowrap">
+        자산 변동 장부
+      </h1>
+      <!-- 우측 여백 밸런스용 빈 상자 -->
+      <div class="w-16 sm:w-20"></div>
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
+  <main class="max-w-6xl mx-auto p-4 sm:p-6 space-y-4">
 
-    <!-- 데이터 요약 바 -->
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
-      <div>
-        <h2 id="viewTitle" class="font-bold text-slate-800 text-sm sm:text-base">기록 상세</h2>
-        <p id="viewDesc" class="text-xs text-slate-400 mt-0.5">데이터를 불러오는 중입니다...</p>
-      </div>
+    <!-- 데이터 요약 바 (설명글 제거 & 기간 제목 + 건수 뱃지 일체형) -->
+    <div class="bg-white px-4 py-3 sm:px-5 sm:py-3.5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+      <h2 id="viewTitle" class="font-bold text-slate-800 text-sm sm:text-base">기록 상세</h2>
       <span id="recordCount" class="bg-blue-50 text-blue-600 font-bold text-xs px-2.5 py-1 rounded-full">0건</span>
     </div>
 
@@ -82,14 +80,11 @@
       'ALL': '전체 누적 기록'
     };
 
-    document.getElementById('periodBadge').textContent = periodNames[period] || period;
-    document.getElementById('viewTitle').textContent = `${periodNames[period] || period}`;
+    document.getElementById('viewTitle').textContent = periodNames[period] || period;
     if (period === 'INTRADAY') {
       document.getElementById('thTime').textContent = '기록 시각';
-      document.getElementById('viewDesc').textContent = '당일 09:00 개장부터 30분 간격으로 수집된 임시 장중 변동 데이터입니다.';
     } else {
       document.getElementById('thTime').textContent = '기록 일자';
-      document.getElementById('viewDesc').textContent = '엑셀 및 일별 스냅샷에 영구 저장된 정기 자산 변동 데이터입니다.';
     }
 
     async function loadTrendHistory() {

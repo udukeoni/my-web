@@ -21,17 +21,24 @@ function renderSummaryCard(data, chartData) {
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 h-full flex flex-col justify-between">
             <!-- 1. 상단 순자산 및 3대 지표 -->
             <div>
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-xs text-slate-500 font-medium">총 순자산 (Net Worth)</span>
-                    <span class="text-[11px] text-slate-400">자산 손익률 <b class="${profitColorClass}">${sign}${netProfitRate}%</b></span>
+                <!-- 1. 총 순자산 제목 -->
+                <div class="text-xs text-slate-500 font-medium mb-1">
+                    총 순자산 (Net Worth)
                 </div>
-                <div class="flex items-baseline gap-2 mb-2">
-                    <div class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                        ₩${Number(data.netWorth || 0).toLocaleString()}
-                    </div>
-                    <div class="text-xs font-semibold ${profitColorClass}">
+
+                <!-- 2. 메인 금액 -->
+                <div class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-none mb-2">
+                    ₩${Number(data.netWorth || 0).toLocaleString()}
+                </div>
+
+                <!-- 3. 손익금액 + 알약 뱃지(원-블록 결합) -->
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-xs font-bold ${profitColorClass}">
                         ${sign}₩${Number(profitAmount).toLocaleString()}
-                    </div>
+                    </span>
+                    <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${isPositive ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}">
+                        ${sign}${netProfitRate}%
+                    </span>
                 </div>
                 
                 <div class="grid grid-cols-3 gap-2 py-2 px-2.5 bg-slate-50/80 rounded-lg text-xs border border-slate-100">

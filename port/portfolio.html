@@ -46,15 +46,24 @@
         </button>
       </div>
 
-      <!-- 뷰 모드 전환 탭 -->
-      <div id="viewTabs" class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium overflow-x-auto">
-        <button data-view="HOLDINGS" class="tab-btn px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap">종목 잔고</button>
-        <button data-view="ALL_LOGS" class="tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">전체 내역</button>
-        <button data-view="TRADE" class="tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">매수/매도</button>
-        <button data-view="DIVIDEND" class="tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">분배/배당금</button>
-        <button data-view="TRANSFER" class="tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">입금/출금</button>
+      <!-- 뷰 모드 전환 탭: 모바일은 5등분 콤팩트 뷰, PC는 넉넉한 와이드 뷰 -->
+      <div id="viewTabs" class="grid grid-cols-5 sm:flex sm:items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium w-full sm:w-auto">
+        <button data-view="HOLDINGS" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap">
+          <span class="sm:hidden">잔고</span><span class="hidden sm:inline">종목 잔고</span>
+        </button>
+        <button data-view="ALL_LOGS" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">
+          <span class="sm:hidden">전체</span><span class="hidden sm:inline">전체 내역</span>
+        </button>
+        <button data-view="TRADE" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">
+          <span class="sm:hidden">매매</span><span class="hidden sm:inline">매수/매도</span>
+        </button>
+        <button data-view="DIVIDEND" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">
+          <span class="sm:hidden">배당</span><span class="hidden sm:inline">분배/배당금</span>
+        </button>
+        <button data-view="TRANSFER" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">
+          <span class="sm:hidden">입출금</span><span class="hidden sm:inline">입금/출금</span>
+        </button>
       </div>
-    </div>
 
     <!-- 순자산 요약 & 비중 트리맵 영역 (높이 동일하게 340px 맞춤) -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">

@@ -23,6 +23,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800">
 
+  <!-- 헤더 -->
   <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-50">
     <h1 class="font-bold text-lg sm:text-xl text-slate-900">자산 대시보드</h1>
     <nav class="flex gap-4 text-sm font-medium">
@@ -33,7 +34,7 @@
 
   <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
     
-    <!-- 컨트롤 바: 계좌선택 + 현재가 동기화 + 탭 그룹 -->
+    <!-- 1. 컨트롤 바: 계좌선택 + 현재가 동기화 + 반응형 5대 탭 -->
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
         <h2 class="font-bold text-slate-700 text-xs sm:text-sm whitespace-nowrap">내 자산 현황</h2>
@@ -46,7 +47,7 @@
         </button>
       </div>
 
-      <!-- 뷰 모드 전환 탭: 모바일은 5등분 콤팩트 뷰, PC는 넉넉한 와이드 뷰 -->
+      <!-- 뷰 모드 전환 탭: 모바일은 5분할 콤팩트, PC는 넉넉한 와이드 뷰 -->
       <div id="viewTabs" class="grid grid-cols-5 sm:flex sm:items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium w-full sm:w-auto">
         <button data-view="HOLDINGS" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap">
           <span class="sm:hidden">잔고</span><span class="hidden sm:inline">종목 잔고</span>
@@ -64,15 +65,16 @@
           <span class="sm:hidden">입출금</span><span class="hidden sm:inline">입금/출금</span>
         </button>
       </div>
+    </div>
 
-    <!-- 순자산 요약 & 비중 트리맵 영역 (높이 동일하게 340px 맞춤) -->
+    <!-- 2. 순자산 요약 & 비중 트리맵 영역 (좌우 2단 배치) -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-      <!-- 좌측: 총순자산 카드 (위쪽 수치 재배치 + 아래쪽 자산추이 그래프) -->
+      <!-- 좌측: 총순자산 및 자산추이 카드 (5칸) -->
       <div id="summarySection" class="lg:col-span-5 h-full">
         <!-- summaryCard.js에서 동적 렌더링 -->
       </div>
 
-      <!-- 우측: 자산 비중 트리맵 카드 -->
+      <!-- 우측: 자산 비중 트리맵 카드 (7칸) -->
       <div class="lg:col-span-7 bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between">
         <div class="flex justify-between items-center mb-2.5">
           <span class="font-bold text-slate-800 text-sm sm:text-base whitespace-nowrap">자산 비중</span>
@@ -81,12 +83,12 @@
             <button data-mode="CUMULATIVE" class="treemap-mode-btn bg-white px-2.5 py-1 rounded shadow-sm font-semibold text-slate-800 transition">누적</button>
           </div>
         </div>
-        <!-- 확장된 트리맵 마운트 영역 -->
+        <!-- 트리맵 렌더링 영역 -->
         <div id="treemapChart" class="w-full flex-grow min-h-[310px]"></div>
       </div>
     </div>
 
-    <!-- 메인 상세 데이터 영역 -->
+    <!-- 3. 메인 상세 데이터 테이블 영역 -->
     <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
       <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -102,7 +104,7 @@
           </thead>
           <tbody id="tableBody" class="divide-y divide-slate-100">
             <tr>
-              <td colspan="7" class="py-8 text-center text-slate-400">데이터를 불러오는 중입니다...</td>
+              <td colspan="9" class="py-8 text-center text-slate-400">데이터를 불러오는 중입니다...</td>
             </tr>
           </tbody>
         </table>
@@ -112,15 +114,9 @@
       <div id="mobileCardList" class="block md:hidden divide-y divide-slate-100 p-2">
         <div class="py-8 text-center text-slate-400 text-sm">데이터를 불러오는 중입니다...</div>
       </div>
-
     </div>
 
   </main>
-
-  <script src="js/components/summaryCard.js"></script>
-  <script src="js/components/treemapChart.js"></script>
-  <script src="js/components/assetListTable.js"></script>
-  <script src="js/app.js"></script>
 
   <!-- 거래내역 입력/수정/삭제 팝업 모달 -->
   <div id="txModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
@@ -139,27 +135,21 @@
 
       <!-- 입력 폼 -->
       <form id="txForm" class="p-6 space-y-4 text-sm">
-        <!-- 수정/삭제용 거래 고유 ID (숨김 필드) -->
         <input type="hidden" id="txId" value="">
 
         <div class="grid grid-cols-2 gap-3">
-          <!-- 거래일자 -->
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">거래일자 <span class="text-red-500">*</span></label>
             <input type="date" id="txDate" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
           </div>
-
-          <!-- 계좌 콤보박스 -->
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">계좌 <span class="text-red-500">*</span></label>
             <select id="txAccount" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <!-- JS에서 자동 채움 -->
             </select>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
-          <!-- 구분 콤보박스 -->
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">구분 <span class="text-red-500">*</span></label>
             <select id="txType" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
@@ -172,24 +162,18 @@
               <option value="출금">출금</option>
             </select>
           </div>
-
-          <!-- 종목 콤보박스 -->
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">종목 <span class="text-red-500">*</span></label>
             <select id="txStock" required class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <!-- JS에서 자동 채움 -->
             </select>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
-          <!-- 수량 -->
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">수량 (주)</label>
             <input type="number" id="txQuantity" min="0" placeholder="예: 10" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
           </div>
-
-          <!-- 단가 -->
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">단가 (원)</label>
             <input type="number" id="txPrice" min="0" placeholder="예: 15000" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
@@ -197,26 +181,21 @@
         </div>
 
         <div class="grid grid-cols-2 gap-3">
-          <!-- 정산금액 -->
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">정산금액 (원) <span class="text-red-500">*</span></label>
             <input type="number" id="txAmount" required placeholder="예: 150000" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-blue-600">
           </div>
-
-          <!-- 세금 / 수수료 -->
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">세금/수수료 (원)</label>
             <input type="number" id="txTax" value="0" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
           </div>
         </div>
 
-        <!-- 메모 -->
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">메모</label>
           <input type="text" id="txMemo" placeholder="예: 정기 매수, 분배금 입금 등" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
 
-        <!-- 버튼 영역: 신규 등록일 땐 삭제 숨김, 수정일 땐 삭제 표시 -->
         <div class="pt-2 flex items-center justify-between border-t border-slate-100">
           <div>
             <button type="button" id="btnDeleteTx" class="hidden px-3.5 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold transition text-xs flex items-center gap-1.5 active:scale-95">
@@ -232,5 +211,10 @@
 
     </div>
   </div>
+
+  <script src="js/components/summaryCard.js"></script>
+  <script src="js/components/treemapChart.js"></script>
+  <script src="js/components/assetListTable.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

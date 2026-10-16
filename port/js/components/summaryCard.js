@@ -22,21 +22,23 @@ function renderSummaryCard(data, chartData) {
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 h-full flex flex-col justify-between">
             <!-- 1. 상단 순자산 및 3대 지표 -->
             <div>
-                <!-- 상단: 총순자산(좌측) + 손익금액/손익률 위아래 배치(우측 빈공간) -->
-                <div class="flex items-start justify-between mb-3">
+                <!-- 상단: 총순자산(좌측) + 시인성을 대폭 높인 손익 블록(우측) -->
+                <div class="flex items-center justify-between mb-3">
                     <div>
                         <span class="text-xs text-slate-500 font-medium block mb-1">총 순자산 (Net Worth)</span>
                         <div class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-none">
                             ₩${Number(data.netWorth || 0).toLocaleString()}
                         </div>
                     </div>
-                    <!-- 우측 빈 공간: 손실금액 / 손실률 위아래 정렬 -->
-                    <div class="text-right">
-                        <div class="text-xs sm:text-sm font-bold ${profitColorClass} leading-tight">
+                    <!-- 우측: 큼직한 손익금액 + 둥근 손익률 뱃지 -->
+                    <div class="text-right flex flex-col items-end">
+                        <div class="text-sm sm:text-base font-extrabold ${profitColorClass} tracking-tight leading-tight">
                             ${sign}₩${Number(profitAmount).toLocaleString()}
                         </div>
-                        <div class="text-[11px] font-semibold ${profitColorClass} mt-0.5">
-                            ${sign}${netProfitRate}%
+                        <div class="mt-1">
+                            <span class="inline-block text-xs font-bold px-2 py-0.5 rounded-md ${isPositive ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}">
+                                ${sign}${netProfitRate}%
+                            </span>
                         </div>
                     </div>
                 </div>

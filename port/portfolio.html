@@ -23,18 +23,16 @@
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-  <!-- 헤더 (화면 양 끝에서 본문 크기인 가운데로 범위 축소) -->
-  <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
+  <main class="max-w-6xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
+    
+    <!-- 0. 상단 헤더 바 (아래 컨트롤 바와 100% 동일한 너비와 둥근 카드 디자인) -->
+    <header class="bg-white px-4 sm:px-6 py-3.5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
       <h1 class="font-bold text-lg sm:text-xl text-slate-900">자산 대시보드</h1>
       <nav class="flex gap-4 text-sm font-medium">
         <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition">공포탐욕지수</a>
-        <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-1">포트폴리오</a>
+        <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-1 font-bold">포트폴리오</a>
       </nav>
-    </div>
-  </header>
-
-  <main class="max-w-6xl mx-auto p-4 sm:p-6 space-y-5">
+    </header>
     
     <!-- 1. 상단 컨트롤 바: 계좌선택 + 현재가 동기화 + 6대 전환 탭 -->
     <div class="bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">

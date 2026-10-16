@@ -1,7 +1,8 @@
 // port/js/components/summaryCard.js
 
 let assetTrendChartInstance = null;
-let currentTrendPeriod = 'ALL'; // 'INTRADAY'(당일) | '1M'(1개월) | '3M'(3개월) | 'ALL'(전체)
+// 변경할 코드 (기본 탭을 '당일'로 설정)
+let currentTrendPeriod = 'INTRADAY'; // 'INTRADAY'(당일) | '1M'(1개월) | '3M'(3개월) | 'ALL'(전체)
 let cachedChartData = null;
 
 function renderSummaryCard(data, chartData) {

@@ -23,19 +23,21 @@
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-  <!-- 헤더 -->
-  <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-50">
-    <h1 class="font-bold text-lg sm:text-xl text-slate-900">자산 대시보드</h1>
-    <nav class="flex gap-4 text-sm font-medium">
-      <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition">공포탐욕지수</a>
-      <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-1">내 자산 포트폴리오</a>
-    </nav>
+  <!-- 헤더 (화면 양 끝에서 본문 크기인 가운데로 범위 축소) -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
+      <h1 class="font-bold text-lg sm:text-xl text-slate-900">자산 대시보드</h1>
+      <nav class="flex gap-4 text-sm font-medium">
+        <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition">공포탐욕지수</a>
+        <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-1">포트폴리오</a>
+      </nav>
+    </div>
   </header>
 
-  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+  <main class="max-w-6xl mx-auto p-4 sm:p-6 space-y-5">
     
-    <!-- 1. 컨트롤 바: 계좌선택 + 현재가 동기화 + 반응형 5대 탭 -->
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <!-- 1. 상단 컨트롤 바: 계좌선택 + 현재가 동기화 + 6대 전환 탭 -->
+    <div class="bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
       <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
         <h2 class="font-bold text-slate-700 text-xs sm:text-sm whitespace-nowrap">내 자산 현황</h2>
         <select id="selectAccount" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -47,9 +49,12 @@
         </button>
       </div>
 
-      <!-- 뷰 모드 전환 탭: 모바일은 5분할 콤팩트, PC는 넉넉한 와이드 뷰 -->
-      <div id="viewTabs" class="grid grid-cols-5 sm:flex sm:items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium w-full sm:w-auto">
-        <button data-view="HOLDINGS" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap">
+      <!-- 6대 뷰 모드 전환 탭 (자산 현황 탭 기본 활성화) -->
+      <div id="viewTabs" class="grid grid-cols-6 sm:flex sm:items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium w-full sm:w-auto">
+        <button data-view="OVERVIEW" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap">
+          <span class="sm:hidden">현황</span><span class="hidden sm:inline">자산 현황</span>
+        </button>
+        <button data-view="HOLDINGS" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">
           <span class="sm:hidden">잔고</span><span class="hidden sm:inline">종목 잔고</span>
         </button>
         <button data-view="ALL_LOGS" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap">
@@ -67,8 +72,8 @@
       </div>
     </div>
 
-    <!-- 2. 순자산 요약 & 비중 트리맵 영역 (좌우 2단 배치) -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+    <!-- 2. 화면 중앙 전환 영역 A: [자산 현황] (총순자산 요약카드 + 자산비중 트리맵) -->
+    <div id="overviewContainer" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
       <!-- 좌측: 총순자산 및 자산추이 카드 (5칸) -->
       <div id="summarySection" class="lg:col-span-5 h-full">
         <!-- summaryCard.js에서 동적 렌더링 -->
@@ -79,8 +84,8 @@
         <div class="flex justify-between items-center mb-2.5">
           <span class="font-bold text-slate-800 text-sm sm:text-base whitespace-nowrap">자산 비중</span>
           <div id="treemapModeTabs" class="flex gap-1 text-xs bg-slate-100 p-1 rounded-lg">
-            <button data-mode="DAILY" class="treemap-mode-btn px-2.5 py-1 rounded text-slate-500 hover:text-slate-800 transition">일간</button>
-            <button data-mode="CUMULATIVE" class="treemap-mode-btn bg-white px-2.5 py-1 rounded shadow-sm font-semibold text-slate-800 transition">누적</button>
+            <button data-mode="DAILY" class="treemap-mode-btn bg-white px-2.5 py-1 rounded shadow-sm font-semibold text-slate-800 transition">일간</button>
+            <button data-mode="CUMULATIVE" class="treemap-mode-btn px-2.5 py-1 rounded text-slate-500 hover:text-slate-800 transition">누적</button>
           </div>
         </div>
         <!-- 트리맵 렌더링 영역 -->
@@ -88,8 +93,8 @@
       </div>
     </div>
 
-    <!-- 3. 메인 상세 데이터 테이블 영역 -->
-    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+    <!-- 3. 화면 중앙 전환 영역 B: [종목 잔고 / 전체 내역 / 매매 / 배당 / 입출금] (기본 숨김: hidden) -->
+    <div id="tableContainer" class="hidden bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
       <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
         <div class="flex items-center gap-2">
           <h3 id="tableTitle" class="font-bold text-slate-800 text-base sm:text-lg">보유 종목 상세</h3>
@@ -113,6 +118,27 @@
       <!-- 모바일용 카드 리스트 뷰 -->
       <div id="mobileCardList" class="block md:hidden divide-y divide-slate-100 p-2">
         <div class="py-8 text-center text-slate-400 text-sm">데이터를 불러오는 중입니다...</div>
+      </div>
+
+      <!-- 4. 하단 페이징(Pagination) 컨트롤 바 -->
+      <div id="paginationBar" class="p-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 bg-slate-50/50">
+        <div class="flex items-center gap-1.5">
+          <span>페이지당 6건</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btnPrevPage" class="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition">
+            <i class="fa-solid fa-chevron-left mr-1"></i>이전
+          </button>
+          <div class="flex items-center gap-1 font-semibold text-slate-700">
+            <select id="selectPage" class="border border-slate-200 rounded px-1.5 py-1 bg-white font-medium text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+              <option value="1">1</option>
+            </select>
+            <span id="totalPageText">/ 1 페이지</span>
+          </div>
+          <button id="btnNextPage" class="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition">
+            다음<i class="fa-solid fa-chevron-right ml-1"></i>
+          </button>
+        </div>
       </div>
     </div>
 

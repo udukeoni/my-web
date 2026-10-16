@@ -1,9 +1,10 @@
 // port/js/app.js
 
 let currentAccount = 'ALL';
-let currentView = 'HOLDINGS';
+let currentView = 'OVERVIEW'; // 💡 기본값을 '자산 현황(OVERVIEW)'으로 설정
 let cachedAccounts = [];
 let cachedHoldings = [];
+let cachedLogs = [];
 
 // 로컬에 캐시된 일간 등락률 가져오기
 function getStoredDailyRates() {
@@ -16,15 +17,18 @@ function getStoredDailyRates() {
 
 async function fetchD1Portfolio() {
     try {
-        const res = await fetch(`/api/portfolio?account=${currentAccount}&view=${currentView}`);
+        // 자산 현황일 때도 테이블 데이터는 미리 불러와서 대기시킴
+        const apiView = currentView === 'OVERVIEW' ? 'HOLDINGS' : currentView;
+        const res = await fetch(`/api/portfolio?account=${currentAccount}&view=${apiView}`);
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
         
         const data = await res.json();
         if (!data.success) throw new Error(data.error);
 
-        // 계좌 및 종목 캐싱
+        // 계좌, 종목, 거래로그 캐싱
         cachedAccounts = data.accounts || [];
         cachedHoldings = data.holdings || [];
+        cachedLogs = data.logs || [];
 
         // 1. 계좌 선택 드롭다운 채우기
         populateAccountOptions(cachedAccounts);
@@ -32,14 +36,14 @@ async function fetchD1Portfolio() {
         // 2. 모달창 콤보박스 채우기
         populateModalOptions(cachedAccounts, cachedHoldings);
 
-        // 3. 상단 요약 카드 및 자산추이 차트 렌더링 (실데이터 chartData 전달)
+        // 3. 상단 요약 카드 및 자산추이 차트 렌더링
         if (typeof renderSummaryCard === 'function') {
             renderSummaryCard(data.summary, data.chartData);
         }
 
         // 4. 종목 데이터에 최신 일간 등락률 매핑
         const dailyRatesMap = getStoredDailyRates();
-        const holdingsWithDaily = (data.holdings || []).map(h => ({
+        const holdingsWithDaily = cachedHoldings.map(h => ({
             ...h,
             daily_change_rate: dailyRatesMap[h.ticker] !== undefined ? dailyRatesMap[h.ticker] : (h.daily_change_rate || 0)
         }));
@@ -49,21 +53,39 @@ async function fetchD1Portfolio() {
             renderTreemapChart(holdingsWithDaily);
         }
 
-        // 6. 메인 테이블 및 모바일 카드 뷰 렌더링
-        if (typeof renderDataTable === 'function') {
-            const listToRender = currentView === 'HOLDINGS' ? holdingsWithDaily : data.logs;
-            renderDataTable(currentView, listToRender);
-        }
+        // 6. 화면 스위칭 및 테이블 렌더링
+        applyViewSwitching(holdingsWithDaily);
 
     } catch (err) {
         console.error("D1 API 호출 에러:", err);
         const tbody = document.getElementById('tableBody');
         const mobileList = document.getElementById('mobileCardList');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-red-500">DB 연동 오류: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-red-500">DB 연동 오류: ${err.message}</td></tr>`;
         }
         if (mobileList) {
             mobileList.innerHTML = `<div class="py-8 text-center text-red-500 text-sm">DB 연동 오류: ${err.message}</div>`;
+        }
+    }
+}
+
+// 💡 [핵심] 자산현황 ↔ 상세 테이블 동적 전환(스위칭) 함수
+function applyViewSwitching(holdingsData) {
+    const overviewBox = document.getElementById('overviewContainer');
+    const tableBox = document.getElementById('tableContainer');
+
+    if (currentView === 'OVERVIEW') {
+        // [자산 현황] 탭: 총자산 카드 + 자산 비중 트리맵 노출, 테이블 숨김
+        if (overviewBox) overviewBox.classList.remove('hidden');
+        if (tableBox) tableBox.classList.add('hidden');
+    } else {
+        // [종목 잔고 / 전체 내역 / 매매 / 배당 / 입출금] 탭: 총자산/트리맵 닫고 테이블 노출
+        if (overviewBox) overviewBox.classList.add('hidden');
+        if (tableBox) tableBox.classList.remove('hidden');
+
+        if (typeof renderDataTable === 'function') {
+            const listToRender = currentView === 'HOLDINGS' ? holdingsData : cachedLogs;
+            renderDataTable(currentView, listToRender);
         }
     }
 }
@@ -124,7 +146,6 @@ function populateModalOptions(accounts, holdings) {
     }
 }
 
-// 구분별 수량/단가 활성화/비활성화 처리 보조 함수
 function toggleQtyAndPriceFields() {
     const txTypeSelect = document.getElementById('txType');
     const txStockSelect = document.getElementById('txStock');
@@ -150,7 +171,23 @@ function toggleQtyAndPriceFields() {
     }
 }
 
-// 거래내역 모달 (등록 / 수정 / 삭제 제어)
+// 탭 버튼 클릭 이벤트 (6대 탭 스타일 및 스위칭 제어)
+function setupTabButtons() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabButtons.forEach(b => {
+                b.className = 'tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap';
+            });
+            btn.className = 'tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap';
+
+            currentView = btn.getAttribute('data-view');
+            fetchD1Portfolio();
+        });
+    });
+}
+
+// 거래내역 모달 이벤트
 function setupTxModal() {
     const modal = document.getElementById('txModal');
     const btnClose = document.getElementById('btnCloseTxModal');
@@ -177,7 +214,6 @@ function setupTxModal() {
     if (btnClose) btnClose.addEventListener('click', closeModal);
     if (btnCancel) btnCancel.addEventListener('click', closeModal);
 
-    // 신규 등록 열기
     document.addEventListener('click', (e) => {
         if (e.target.closest('#btnOpenTxModal')) {
             if (form) form.reset();
@@ -192,7 +228,6 @@ function setupTxModal() {
         }
     });
 
-    // 수정 가능한 행 클릭 열기
     document.addEventListener('click', (e) => {
         const row = e.target.closest('.tx-editable-row');
         if (row && row.dataset.tx) {
@@ -225,7 +260,6 @@ function setupTxModal() {
         selectType.addEventListener('change', toggleQtyAndPriceFields);
     }
 
-    // 저장 및 수정 제출
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -274,7 +308,6 @@ function setupTxModal() {
         });
     }
 
-    // 삭제하기 버튼
     if (btnDelete) {
         btnDelete.addEventListener('click', async () => {
             const tradeId = inputId.value;
@@ -307,21 +340,6 @@ function setupTxModal() {
             }
         });
     }
-}
-
-function setupTabButtons() {
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            tabButtons.forEach(b => {
-                b.className = 'tab-btn px-2.5 py-1.5 rounded-lg transition text-slate-500 hover:text-slate-800 whitespace-nowrap';
-            });
-            btn.className = 'tab-btn px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap';
-
-            currentView = btn.getAttribute('data-view');
-            fetchD1Portfolio();
-        });
-    });
 }
 
 function setupSyncPriceButton() {

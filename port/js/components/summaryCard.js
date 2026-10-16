@@ -56,7 +56,7 @@ function renderSummaryCard(data, chartData) {
             <!-- 2. 하단 자산 추이 영역 (진짜 실데이터 연동) -->
             <div class="pt-3 mt-2 border-t border-slate-100 flex-grow flex flex-col justify-between">
                 <div class="flex justify-between items-center mb-1.5">
-                    <span class="font-bold text-slate-700 text-xs">자산 추이</span>
+                    <span id="btnSecretTrendHistory" class="font-bold text-slate-700 text-xs select-none">자산 추이</span>
                     <!-- 기간 필터 탭: 당일(장중) / 1개월 / 3개월 / 전체 -->
                     <div id="trendPeriodTabs" class="flex gap-1 text-[10px] bg-slate-100 p-0.5 rounded-md">
                         <button data-period="INTRADAY" class="trend-btn ${currentTrendPeriod === 'INTRADAY' ? 'bg-white font-bold text-slate-800 shadow-sm' : 'text-slate-500'} px-1.5 py-0.5 rounded transition">당일</button>
@@ -213,3 +213,11 @@ function setupTrendPeriodTabs() {
         });
     });
 }
+
+// 쉿! 아는 사람만 누를 수 있는 '자산 추이' 히든 상세 이동 이벤트
+document.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'btnSecretTrendHistory') {
+        // 현재 선택된 기간(INTRADAY, 1M, 3M, ALL)을 가지고 상세 내역 페이지로 이동
+        window.location.href = `trend-history.html?period=${currentTrendPeriod}&account=${currentAccount}`;
+    }
+});

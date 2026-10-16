@@ -1,0 +1,166 @@
+<!-- port/trend-history.html -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>자산 변동 기록 장부</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+  <style>
+    body { font-family: 'Pretendard', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- 헤더 -->
+  <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <a href="portfolio.html" class="text-slate-400 hover:text-slate-700 transition p-1.5 rounded-lg hover:bg-slate-100 flex items-center gap-1 text-sm font-semibold">
+        <i class="fa-solid fa-arrow-left"></i> 대시보드로 복귀
+      </a>
+      <span class="text-slate-300">|</span>
+      <h1 class="font-bold text-base sm:text-lg text-slate-900">자산 변동 기록 장부</h1>
+    </div>
+    <div class="text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1 rounded-full" id="periodBadge">
+      조회 중...
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
+
+    <!-- 데이터 요약 바 -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 id="viewTitle" class="font-bold text-slate-800 text-sm sm:text-base">기록 상세</h2>
+        <p id="viewDesc" class="text-xs text-slate-400 mt-0.5">데이터를 불러오는 중입니다...</p>
+      </div>
+      <span id="recordCount" class="bg-blue-50 text-blue-600 font-bold text-xs px-2.5 py-1 rounded-full">0건</span>
+    </div>
+
+    <!-- 테이블 카드 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <!-- PC 와이드 테이블 -->
+      <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200">
+            <tr>
+              <th id="thTime" class="py-3.5 px-4">기록 일시</th>
+              <th class="py-3.5 px-4">계좌</th>
+              <th class="py-3.5 px-4 text-right">총 매입원가</th>
+              <th class="py-3.5 px-4 text-right">평가금 (순자산)</th>
+              <th class="py-3.5 px-4 text-right">평가손익</th>
+              <th class="py-3.5 px-4 text-right">수익률</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-100">
+            <tr>
+              <td colspan="6" class="py-12 text-center text-slate-400">데이터를 불러오는 중입니다...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 모바일 카드 리스트 -->
+      <div id="mobileList" class="block md:hidden divide-y divide-slate-100 p-2">
+        <div class="py-12 text-center text-slate-400 text-sm">데이터를 불러오는 중입니다...</div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const period = urlParams.get('period') || 'ALL';
+    const account = urlParams.get('account') || 'ALL';
+
+    const periodNames = {
+      'INTRADAY': '당일 실시간 기록 (30분 주기)',
+      '1M': '최근 1개월 기록',
+      '3M': '최근 3개월 기록',
+      'ALL': '전체 누적 기록'
+    };
+
+    document.getElementById('periodBadge').textContent = periodNames[period] || period;
+    document.getElementById('viewTitle').textContent = `${periodNames[period] || period}`;
+    if (period === 'INTRADAY') {
+      document.getElementById('thTime').textContent = '기록 시각';
+      document.getElementById('viewDesc').textContent = '당일 09:00 개장부터 30분 간격으로 수집된 임시 장중 변동 데이터입니다.';
+    } else {
+      document.getElementById('thTime').textContent = '기록 일자';
+      document.getElementById('viewDesc').textContent = '엑셀 및 일별 스냅샷에 영구 저장된 정기 자산 변동 데이터입니다.';
+    }
+
+    async function loadTrendHistory() {
+      const tbody = document.getElementById('tableBody');
+      const mobileList = document.getElementById('mobileList');
+      const badge = document.getElementById('recordCount');
+
+      try {
+        const res = await fetch(`/api/trend-history?period=${period}&account=${account}`);
+        const result = await res.json();
+
+        if (!result.success) throw new Error(result.error);
+
+        const list = result.data || [];
+        badge.textContent = `${list.length}건`;
+
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-slate-400">기록된 데이터가 없습니다.</td></tr>';
+          mobileList.innerHTML = '<div class="py-12 text-center text-slate-400 text-sm">기록된 데이터가 없습니다.</div>';
+          return;
+        }
+
+        // 데스크톱 테이블
+        tbody.innerHTML = list.map(item => {
+          const isPos = item.profit_amount >= 0;
+          const sign = isPos ? '+' : '';
+          const colorClass = isPos ? 'text-red-500 font-bold' : 'text-blue-500 font-bold';
+
+          return `
+            <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+              <td class="py-3.5 px-4 font-mono text-xs text-slate-600 whitespace-nowrap">${item.time_label}</td>
+              <td class="py-3.5 px-4 text-xs font-semibold text-slate-800">${item.account_name}</td>
+              <td class="py-3.5 px-4 text-right font-medium">₩${Number(item.invested || 0).toLocaleString()}</td>
+              <td class="py-3.5 px-4 text-right font-extrabold text-slate-900">₩${Number(item.net_worth || 0).toLocaleString()}</td>
+              <td class="py-3.5 px-4 text-right ${colorClass}">${sign}₩${Number(item.profit_amount || 0).toLocaleString()}</td>
+              <td class="py-3.5 px-4 text-right ${colorClass}">${sign}${item.profit_rate}%</td>
+            </tr>
+          `;
+        }).join('');
+
+        // 모바일 카드 뷰
+        mobileList.innerHTML = list.map(item => {
+          const isPos = item.profit_amount >= 0;
+          const sign = isPos ? '+' : '';
+          const colorClass = isPos ? 'text-red-500' : 'text-blue-500';
+
+          return `
+            <div class="p-3.5 bg-white rounded-xl border border-slate-100 shadow-sm mb-2 text-xs">
+              <div class="flex justify-between items-center mb-1.5">
+                <span class="font-bold text-slate-800">${item.account_name}</span>
+                <span class="font-mono text-slate-400">${item.time_label}</span>
+              </div>
+              <div class="flex justify-between items-center my-1">
+                <span class="text-slate-400">평가금(순자산)</span>
+                <span class="text-sm font-extrabold text-slate-900">₩${Number(item.net_worth || 0).toLocaleString()}</span>
+              </div>
+              <div class="flex justify-between items-center text-[11px] pt-1.5 border-t border-slate-50">
+                <span class="text-slate-400">원금 ₩${Number(item.invested || 0).toLocaleString()}</span>
+                <span class="font-bold ${colorClass}">${sign}${item.profit_rate}% (${sign}₩${Number(item.profit_amount || 0).toLocaleString()})</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-red-500">조회 오류: ${err.message}</td></tr>`;
+        mobileList.innerHTML = `<div class="py-12 text-center text-red-500 text-sm">조회 오류: ${err.message}</div>`;
+      }
+    }
+
+    loadTrendHistory();
+  </script>
+</body>
+</html>

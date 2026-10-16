@@ -10,17 +10,16 @@ export async function onRequestGet(context) {
     try {
         const db = env.DB;
 
-        // 1. 전체 계좌 목록 조회 (created_at 제거 -> account_id로 안전 정렬)
+        // 1. 전체 계좌 목록 조회
         const accountsResult = await db.prepare("SELECT * FROM accounts ORDER BY account_id ASC").all();
         const accounts = accountsResult.results || [];
 
-        // 계좌 ID -> 한글명 맵핑 사전
         const accountNameMap = {};
         accounts.forEach(a => {
             if (a.account_id) accountNameMap[a.account_id] = a.account_name;
         });
 
-        // 2. 전체 종목 마스터 조회 (종목코드 -> 한글명 맵핑 사전)
+        // 2. 전체 종목 마스터 조회
         const assetsResult = await db.prepare("SELECT ticker, asset_name FROM assets").all();
         const assetNameMap = {};
         (assetsResult.results || []).forEach(ast => {
@@ -62,7 +61,7 @@ export async function onRequestGet(context) {
             : await holdingsStmt.all();
         const holdings = holdingsResult.results || [];
 
-        // 4. 거래원장 (trade_logs) 안전 조회
+        // 4. 거래원장 (trade_logs) 조회
         let rawLogs = [];
         let logQuery = "SELECT * FROM trade_logs";
         const logConditions = [];
@@ -76,7 +75,7 @@ export async function onRequestGet(context) {
         if (viewType === 'TRADE') {
             logConditions.push("trade_type IN ('매수', '매도')");
         } else if (viewType === 'DIVIDEND') {
-            logConditions.push("trade_type = '분배금'");
+            logConditions.push("trade_type IN ('분배금', '배당금')");
         } else if (viewType === 'TRANSFER') {
             logConditions.push("trade_type IN ('입금', '출금', '이자')");
         }
@@ -84,7 +83,7 @@ export async function onRequestGet(context) {
         if (logConditions.length > 0) {
             logQuery += " WHERE " + logConditions.join(" AND ");
         }
-        logQuery += " ORDER BY trade_date DESC LIMIT 1000";
+        logQuery += " ORDER BY trade_date DESC, trade_id DESC LIMIT 1000";
 
         try {
             const logStmt = db.prepare(logQuery);
@@ -97,7 +96,6 @@ export async function onRequestGet(context) {
             rawLogs = [];
         }
 
-        // 안전한 한글명 매핑
         const logs = rawLogs.map(item => {
             const accName = accountNameMap[item.account_id] || item.account_id || '계좌';
             let displayAssetName = assetNameMap[item.ticker] || item.ticker || '-';
@@ -139,6 +137,32 @@ export async function onRequestGet(context) {
             weight: totalStockEval > 0 ? Number(((item.eval_amount / totalStockEval) * 100).toFixed(2)) : 0
         }));
 
+        // -----------------------------------------------------------------
+        // 🆕 6. 자산 추이 그래프 데이터 조회 (장중 실시간 + 일별 과거 기록)
+        // -----------------------------------------------------------------
+        let intradayHistory = [];
+        let dailyHistory = [];
+
+        try {
+            // (1) 당일 장중 30분 시간별 추이
+            const intraQuery = accountFilter === 'ALL'
+                ? "SELECT recorded_at, net_worth, invested FROM intraday_snapshots WHERE account_id = 'ALL' ORDER BY id ASC"
+                : "SELECT recorded_at, net_worth, invested FROM intraday_snapshots WHERE account_id = ? ORDER BY id ASC";
+            const intraStmt = db.prepare(intraQuery);
+            const intraRes = accountFilter === 'ALL' ? await intraStmt.all() : await intraStmt.bind(accountFilter).all();
+            intradayHistory = intraRes.results || [];
+
+            // (2) 일별/주별 장기 자산 추이 (엑셀 과거치 포함)
+            const dailyQuery = accountFilter === 'ALL'
+                ? "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = 'ALL' ORDER BY snapshot_date ASC"
+                : "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = ? ORDER BY snapshot_date ASC";
+            const dailyStmt = db.prepare(dailyQuery);
+            const dailyRes = accountFilter === 'ALL' ? await dailyStmt.all() : await dailyStmt.bind(accountFilter).all();
+            dailyHistory = dailyRes.results || [];
+        } catch (chartErr) {
+            console.error("차트 데이터 조회 에러:", chartErr.message);
+        }
+
         return new Response(JSON.stringify({
             success: true,
             accountFilter,
@@ -155,7 +179,12 @@ export async function onRequestGet(context) {
             },
             accounts,
             holdings: holdingsWithWeight,
-            logs
+            logs,
+            // 🆕 프론트엔드로 전달되는 실제 시계열 차트 데이터
+            chartData: {
+                intraday: intradayHistory, // 당일 09:00 ~ 15:30 30분 간격
+                daily: dailyHistory        // 8월 20일부터 오늘까지의 진짜 과거 기록
+            }
         }), {
             headers: { "Content-Type": "application/json; charset=UTF-8", "Cache-Control": "no-cache" }
         });

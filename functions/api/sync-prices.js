@@ -19,7 +19,7 @@ export async function onRequestPost(context) {
         const updatedList = [];
         const updateStatements = [];
 
-        // 2. 네이버 증권에서 현재가 및 일간 등락률 실시간 수집
+        // 2. 네이버 증권에서 최신 현재가 및 일간 등락률 실시간 수집
         await Promise.allSettled(assets.map(async (asset) => {
             try {
                 const naverUrl = `https://m.stock.naver.com/api/stock/${asset.ticker}/basic`;
@@ -33,11 +33,9 @@ export async function onRequestPost(context) {
                     const data = await res.json();
                     const rawPrice = data.nowPrice || data.closePrice;
                     
-                    // 전일 대비 등락률 파싱
                     let dailyRate = parseFloat(data.fluctuationsRatio || 0);
                     if (isNaN(dailyRate)) dailyRate = 0;
 
-                    // 하락(code 4 또는 5) 상태 음수 부호 보정
                     if (data.compareToPreviousPrice && (data.compareToPreviousPrice.code === '4' || data.compareToPreviousPrice.code === '5') && dailyRate > 0) {
                         dailyRate = -dailyRate;
                     }

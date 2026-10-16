@@ -32,9 +32,9 @@ async function fetchD1Portfolio() {
         // 2. 모달창 콤보박스 채우기
         populateModalOptions(cachedAccounts, cachedHoldings);
 
-        // 3. 상단 요약 카드 렌더링
+        // 3. 상단 요약 카드 및 자산추이 차트 렌더링 (실데이터 chartData 전달)
         if (typeof renderSummaryCard === 'function') {
-            renderSummaryCard(data.summary);
+            renderSummaryCard(data.summary, data.chartData);
         }
 
         // 4. 종목 데이터에 최신 일간 등락률 매핑
@@ -150,7 +150,7 @@ function toggleQtyAndPriceFields() {
     }
 }
 
-// 🆕 거래내역 모달 (등록 / 수정 / 삭제 완벽 제어)
+// 거래내역 모달 (등록 / 수정 / 삭제 제어)
 function setupTxModal() {
     const modal = document.getElementById('txModal');
     const btnClose = document.getElementById('btnCloseTxModal');
@@ -171,14 +171,13 @@ function setupTxModal() {
     const inputTax = document.getElementById('txTax');
     const inputMemo = document.getElementById('txMemo');
 
-    // 팝업 닫기
     const closeModal = () => {
         if (modal) modal.classList.add('hidden');
     };
     if (btnClose) btnClose.addEventListener('click', closeModal);
     if (btnCancel) btnCancel.addEventListener('click', closeModal);
 
-    // 1) 신규 등록 버튼 클릭 시 (빈 폼 열기)
+    // 신규 등록 열기
     document.addEventListener('click', (e) => {
         if (e.target.closest('#btnOpenTxModal')) {
             if (form) form.reset();
@@ -193,7 +192,7 @@ function setupTxModal() {
         }
     });
 
-    // 2) 수정 가능한 행 클릭 시 (기존 데이터 채워서 수정/삭제 모드로 열기)
+    // 수정 가능한 행 클릭 열기
     document.addEventListener('click', (e) => {
         const row = e.target.closest('.tx-editable-row');
         if (row && row.dataset.tx) {
@@ -222,12 +221,11 @@ function setupTxModal() {
         }
     });
 
-    // 3) 구분 콤보박스 변경 시 수량/단가 비활성화
     if (selectType) {
         selectType.addEventListener('change', toggleQtyAndPriceFields);
     }
 
-    // 4) 저장/수정 폼 제출 이벤트
+    // 저장 및 수정 제출
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -276,7 +274,7 @@ function setupTxModal() {
         });
     }
 
-    // 5) 삭제하기 버튼 클릭 이벤트
+    // 삭제하기 버튼
     if (btnDelete) {
         btnDelete.addEventListener('click', async () => {
             const tradeId = inputId.value;

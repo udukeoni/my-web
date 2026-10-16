@@ -1,19 +1,27 @@
-name: Auto Sync Stock Prices
+name: 평일 장중 주가 및 자산 스냅샷 무인 동기화
 
 on:
   schedule:
-    # UTC 기준 (한국시간 KST = UTC + 9시간)
-    # 1. 평일(월~금) 09:00 ~ 15:30 (30분 간격): UTC 00:00 ~ 06:30
-    - cron: '*/30 0-6 * * 1-5'
-    # 2. 평일(월~금) 15:40 (장 마감 종가 확정 1회): UTC 06:40
+    # 1) 평일 장중 30분 간격 (한국 시간 09:00 ~ 15:30 / UTC 00:00 ~ 06:30)
+    - cron: '0,30 0-6 * * 1-5'
+    # 2) 평일 장마감 직후 일별 최종 스냅샷 (한국 시간 15:40 / UTC 06:40)
     - cron: '40 6 * * 1-5'
-  workflow_dispatch: # GitHub 웹페이지에서 필요시 수동 실행도 가능
+  workflow_dispatch: # 필요 시 깃허브 웹에서 수동 실행 가능
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Sync Prices API
+      - name: 1. 네이버 주가 최신 시세 동기화
         run: |
-          response=$(curl -s -w "\n%{http_code}" -X POST "https://my-feargridindex.pages.dev/api/sync-prices")
-          echo "$response"
+          curl -s -X POST "https://my-feargridindex.pages.dev/api/sync-prices"
+
+      - name: 2. 장중 시간대별 실시간 자산 스냅샷 기록 (09:00 ~ 15:30)
+        run: |
+          curl -s -X POST "https://my-feargridindex.pages.dev/api/snapshot-intraday"
+
+      - name: 3. 장마감 일별 최종 자산 영구 기록 (15:40 실행 시 자동 반영)
+        # 한국 시간 15시(UTC 6시) 35분 이후 실행될 때만 동작
+        if: github.event.schedule == '40 6 * * 1-5' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -s -X POST "https://my-feargridindex.pages.dev/api/snapshot-daily"

@@ -22,41 +22,44 @@ function renderSummaryCard(data, chartData) {
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 h-full flex flex-col justify-between">
             <!-- 1. 상단 순자산 및 3대 지표 -->
             <div>
-                <!-- 1. 총 순자산 제목 -->
-                <div class="text-xs text-slate-500 font-medium mb-1">
-                    총 순자산 (Net Worth)
-                </div>
-
-                <!-- 2. 메인 금액 -->
-                <div class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-none mb-2">
-                    ₩${Number(data.netWorth || 0).toLocaleString()}
-                </div>
-
-                <!-- 3. 손익금액 + 알약 뱃지(원-블록 결합) -->
-                <div class="flex items-center gap-2 mb-3">
-                    <span class="text-xs font-bold ${profitColorClass}">
-                        ${sign}₩${Number(profitAmount).toLocaleString()}
-                    </span>
-                    <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${isPositive ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}">
-                        ${sign}${netProfitRate}%
-                    </span>
+                <!-- 상단: 총순자산(좌측) + 손익금액/손익률 위아래 배치(우측 빈공간) -->
+                <div class="flex items-start justify-between mb-3">
+                    <div>
+                        <span class="text-xs text-slate-500 font-medium block mb-1">총 순자산 (Net Worth)</span>
+                        <div class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-none">
+                            ₩${Number(data.netWorth || 0).toLocaleString()}
+                        </div>
+                    </div>
+                    <!-- 우측 빈 공간: 손실금액 / 손실률 위아래 정렬 -->
+                    <div class="text-right">
+                        <div class="text-xs sm:text-sm font-bold ${profitColorClass} leading-tight">
+                            ${sign}₩${Number(profitAmount).toLocaleString()}
+                        </div>
+                        <div class="text-[11px] font-semibold ${profitColorClass} mt-0.5">
+                            ${sign}${netProfitRate}%
+                        </div>
+                    </div>
                 </div>
                 
+                <!-- 하단 3대 지표 순서 변경: [주식 평가금] -> [총 매입원가] -> [예수금 (현금)] -->
                 <div class="grid grid-cols-3 gap-2 py-2 px-2.5 bg-slate-50/80 rounded-lg text-xs border border-slate-100">
+                    <!-- 1. 주식 평가금 -->
                     <div>
                         <span class="text-slate-400 block text-[10px]">주식 평가금</span>
                         <span class="font-bold text-slate-800 text-xs block">₩${Number(data.totalStockEval || 0).toLocaleString()}</span>
                         <span class="text-[10px] font-semibold ${profitColorClass}">${sign}${stockProfitRate}%</span>
                     </div>
-                    <div>
-                        <span class="text-slate-400 block text-[10px]">예수금 (현금)</span>
-                        <span class="font-bold text-slate-800 text-xs block">₩${Number(data.cashBalance || 0).toLocaleString()}</span>
-                        <span class="text-[10px] text-slate-400">비중 ${data.cashWeight || 0}%</span>
-                    </div>
+                    <!-- 2. 총 매입원가 -->
                     <div>
                         <span class="text-slate-400 block text-[10px]">총 매입원가</span>
                         <span class="font-bold text-slate-800 text-xs block">₩${Number(data.invested || 0).toLocaleString()}</span>
                         <span class="text-[10px] text-slate-400">주식 원가</span>
+                    </div>
+                    <!-- 3. 예수금 (현금) -->
+                    <div>
+                        <span class="text-slate-400 block text-[10px]">예수금 (현금)</span>
+                        <span class="font-bold text-slate-800 text-xs block">₩${Number(data.cashBalance || 0).toLocaleString()}</span>
+                        <span class="text-[10px] text-slate-400">비중 ${data.cashWeight || 0}%</span>
                     </div>
                 </div>
             </div>

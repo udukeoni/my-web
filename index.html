@@ -22,31 +22,28 @@
   <div class="max-w-5xl mx-auto w-full">
     
     <!-- 1. 헤더 영역 -->
-    <header class="flex flex-col md:flex-row md:items-end justify-between mb-8 pb-4 border-b border-slate-200">
+    <header class="flex flex-row items-center justify-between mb-8 pb-4 border-b border-slate-200">
       <div>
-        <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">시장 공포탐욕지수</h1>
-        <p class="text-slate-500 mt-1">S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
+        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">시장 공포탐욕지수</h1>
+        <p class="text-xs sm:text-sm text-slate-500 mt-1">S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
       </div>
       
       <!-- 우측 컨트롤: 동기화 툴팁 버튼 + 포트폴리오 링크 -->
-      <div class="mt-4 md:mt-0 flex items-center gap-1.5 text-sm text-slate-500 font-medium">
+      <div class="flex items-center gap-1 sm:gap-2 text-sm text-slate-500 font-medium relative">
         
         <div class="relative flex items-center justify-center" id="sync-container">
-          <!-- 💡 브라우저 네이티브 하얀 네모 박스를 방지하기 위해 title 속성을 완전히 제거 -->
-          <button id="btn-sync" onclick="handleSyncButtonClick(event)" class="p-2 hover:bg-slate-100 rounded-lg transition active:scale-95">
+          <!-- 동기화 회전 버튼 (클릭 시 언제나 즉시 동기화 실행) -->
+          <button id="btn-sync" onclick="handleSyncClick(event)" class="p-2 hover:bg-slate-100 rounded-lg transition active:scale-95" aria-label="동기화">
             <i id="sync-icon" class="fa-solid fa-arrows-rotate text-slate-400 hover:text-slate-700 transition text-base"></i>
           </button>
           
-          <!-- 💡 [해결] right-0 정렬로 모바일 화면 왼쪽 밖으로 절대 잘리지 않는 세련된 블랙 말풍선 -->
-          <div id="sync-tooltip" class="absolute right-0 bottom-full mb-2 hidden flex-col items-end z-30 transition duration-200">
-            <div class="bg-slate-900 text-white text-[11px] font-mono py-1.5 px-3 rounded-xl shadow-xl whitespace-nowrap flex items-center gap-2 border border-slate-800">
-              <span id="tooltip-time" class="text-slate-300">시간 확인 중...</span>
-              <button onclick="executeSync(event)" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-2 py-0.5 rounded text-[10px] transition active:scale-95">
-                갱신
-              </button>
+          <!-- 💡 [해결] 갱신 버튼을 완전히 없애고 우측 끝 정렬로 모바일 잘림을 원천 차단한 순수 시간 툴팁 -->
+          <div id="sync-tooltip" class="absolute right-0 top-full mt-2 hidden flex-col items-end z-30 pointer-events-none transition duration-200">
+            <!-- 꼬리표 (위쪽을 향함) -->
+            <div class="w-2.5 h-2.5 bg-slate-900 rotate-45 -mb-1 mr-3 border-l border-t border-slate-800"></div>
+            <div class="bg-slate-900 text-white text-[11px] font-mono py-1.5 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-800">
+              <span id="tooltip-time" class="text-slate-200">시간 확인 중...</span>
             </div>
-            <!-- 아이콘 정중앙에 맞춘 말풍선 꼬리 -->
-            <div class="w-2.5 h-2.5 bg-slate-900 rotate-45 -mt-1 mr-3 border-r border-b border-slate-800"></div>
           </div>
         </div>
 
@@ -104,10 +101,7 @@
 
   <script>
     const ARC_LENGTH = 251.3;
-    let isTooltipOpen = false;
-
-    // 마우스 호버가 가능한 PC 환경인지 판별
-    const isHoverablePC = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    let tooltipTimer = null;
 
     function getTheme(score) {
       if (score <= 24) return { label: '극단적 공포', color: '#ef4444', bg: 'bg-red-100', text: 'text-red-700' };
@@ -161,33 +155,11 @@
 
     function updateTooltipText(timeString) {
       const tooltipTimeEl = document.getElementById('tooltip-time');
-      if (tooltipTimeEl) tooltipTimeEl.textContent = timeString;
+      if (tooltipTimeEl) tooltipTimeEl.textContent = `동기화: ${timeString}`;
     }
 
-    // 💡 [핵심] 버튼 클릭 제어
-    function handleSyncButtonClick(e) {
-      e.stopPropagation();
-
-      if (isHoverablePC) {
-        // PC: 마우스로 이미 툴팁을 보고 있으므로 클릭 시 바로 즉시 동기화 실행!
-        executeSync(e);
-      } else {
-        // 모바일(터치): 1단계로 시간 팝오버를 열어 확인시키고, 열린 상태에서 누르면 동기화 실행
-        const tooltip = document.getElementById('sync-tooltip');
-        if (!tooltip) return;
-
-        if (!isTooltipOpen) {
-          tooltip.classList.remove('hidden');
-          tooltip.classList.add('flex');
-          isTooltipOpen = true;
-        } else {
-          executeSync(e);
-        }
-      }
-    }
-
-    // 실제 동기화 실행
-    async function executeSync(e) {
+    // 💡 [클릭 동작] 동기화 즉시 실행 + 말풍선으로 새 시간 2초간 노출
+    async function handleSyncClick(e) {
       if (e) e.stopPropagation();
       const btn = document.getElementById('btn-sync');
       const icon = document.getElementById('sync-icon');
@@ -197,53 +169,46 @@
       if (btn) btn.disabled = true;
       if (icon) icon.classList.add('fa-spin', 'text-blue-500');
       if (tooltipTimeEl) tooltipTimeEl.textContent = '동기화 중...';
+      
+      // 말풍선 열기
+      if (tooltip) {
+        tooltip.classList.remove('hidden');
+        tooltip.classList.add('flex');
+      }
 
       try {
         await fetch('/api/sync-fgi', { method: 'POST' });
         await fetchData();
-
-        // 모바일인 경우 갱신 후 1.5초 뒤 말풍선 자동 닫기
-        setTimeout(() => {
-          if (tooltip && !isHoverablePC) {
-            tooltip.classList.remove('flex');
-            tooltip.classList.add('hidden');
-            isTooltipOpen = false;
-          }
-        }, 1500);
       } catch (err) {
         console.error("수동 동기화 실패:", err);
       } finally {
         if (btn) btn.disabled = false;
         if (icon) icon.classList.remove('fa-spin', 'text-blue-500');
+
+        // 동기화 완료 후 2초 뒤 말풍선 자동 숨김
+        clearTimeout(tooltipTimer);
+        tooltipTimer = setTimeout(() => {
+          if (tooltip) {
+            tooltip.classList.remove('flex');
+            tooltip.classList.add('hidden');
+          }
+        }, 2000);
       }
     }
 
-    // 화면 빈 곳 터치 시 모바일 말풍선 닫기
-    document.addEventListener('click', (e) => {
-      const container = document.getElementById('sync-container');
-      const tooltip = document.getElementById('sync-tooltip');
-      if (container && !container.contains(e.target)) {
-        if (tooltip && !isHoverablePC) {
-          tooltip.classList.remove('flex');
-          tooltip.classList.add('hidden');
-          isTooltipOpen = false;
-        }
-      }
-    });
-
-    // PC 전용 호버 이벤트 (마우스 올리면 말풍선 스르륵 표시)
+    // PC 전용 호버 이벤트 (마우스 올리면 시간만 조용히 확인)
     const syncContainer = document.getElementById('sync-container');
-    if (syncContainer && isHoverablePC) {
+    if (syncContainer) {
       syncContainer.addEventListener('mouseenter', () => {
         const tooltip = document.getElementById('sync-tooltip');
-        if (tooltip) {
+        if (tooltip && window.matchMedia('(hover: hover)').matches) {
           tooltip.classList.remove('hidden');
           tooltip.classList.add('flex');
         }
       });
       syncContainer.addEventListener('mouseleave', () => {
         const tooltip = document.getElementById('sync-tooltip');
-        if (tooltip) {
+        if (tooltip && window.matchMedia('(hover: hover)').matches) {
           tooltip.classList.remove('flex');
           tooltip.classList.add('hidden');
         }

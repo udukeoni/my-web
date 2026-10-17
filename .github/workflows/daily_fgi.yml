@@ -1,38 +1,15 @@
-name: Daily Fear and Greed Index Update
+name: 공포탐욕지수 무인 자동 동기화 (6시간 주기)
 
 on:
   schedule:
-    # UTC 21:00 = 한국 시간(KST) 매일 아침 06:00
-    - cron: '0 21 * * *'
-  workflow_dispatch: # Actions 탭에서 수동 실행 가능 버튼 활성화
-
-permissions:
-  contents: write
+    # 한국 시간(KST) 기준 06:00, 12:00, 18:00, 24:00 (UTC 21:00, 03:00, 09:00, 15:00)
+    - cron: '0 3,9,15,21 * * *'
+  workflow_dispatch: # 필요 시 깃허브 Actions 탭에서 수동 실행 가능
 
 jobs:
-  update-data:
+  sync-fgi:
     runs-on: ubuntu-latest
     steps:
-      - name: 저장소 체크아웃
-        uses: actions/checkout@v4
-
-      - name: Python 설정
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: 필수 패키지 설치
+      - name: CNN 공포탐욕지수 D1 DB 동기화 API 호출
         run: |
-          pip install requests yfinance
-
-      - name: 데이터 계산 및 JSON 업데이트
-        run: |
-          python update_fgi.py
-
-      - name: 변경사항 커밋 및 푸시
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data.json
-          git commit -m "chore: 일일 공포탐욕지수 데이터 업데이트" || echo "No changes to commit"
-          git push
+          curl -s -X POST "https://sleepingant.pages.dev/api/sync-fgi"

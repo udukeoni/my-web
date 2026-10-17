@@ -28,16 +28,16 @@
         <p class="text-slate-500 mt-1">S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
       </div>
       
-      <!-- 우측 컨트롤: 시간, 새로고침, 포트폴리오 링크 -->
-      <div class="mt-4 md:mt-0 flex items-center gap-2 text-sm text-slate-500 font-medium">
-        <span id="updated-at" class="mr-2 text-slate-400">데이터 로딩 중...</span>
+      <!-- 우측 컨트롤: 간략한 날짜/시간, 새로고침, 포트폴리오 링크 -->
+      <div class="mt-4 md:mt-0 flex items-center gap-2 text-xs font-mono text-slate-400">
+        <span id="updated-at" class="mr-1 tracking-tight">--</span>
         
         <button id="btn-sync" onclick="handleManualSync()" class="p-1.5 hover:bg-slate-100 rounded-lg transition" title="실시간 현재가 동기화">
-          <i id="sync-icon" class="fa-solid fa-arrows-rotate text-slate-400 hover:text-slate-600"></i>
+          <i id="sync-icon" class="fa-solid fa-arrows-rotate text-slate-400 hover:text-slate-600 text-sm"></i>
         </button>
 
-        <a href="port/portfolio.html" class="p-1.5 opacity-30 hover:opacity-100 hover:bg-slate-100 rounded-lg transition ml-1" title="자산 관리">
-          <i class="fa-solid fa-wallet text-slate-400 hover:text-blue-600"></i>
+        <a href="port/portfolio.html" class="p-1.5 opacity-40 hover:opacity-100 hover:bg-slate-100 rounded-lg transition ml-1" title="포트폴리오">
+          <i class="fa-solid fa-wallet text-slate-500 hover:text-blue-600 text-sm"></i>
         </a>
       </div>
     </header>
@@ -45,7 +45,7 @@
     <!-- 2. 지수 카드 그리드 (2열 듀얼 배치) -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
       
-      <!-- [카드 1] S&P500 (D1 DB CNN 공식 연동) -->
+      <!-- [카드 1] S&P500 -->
       <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 flex flex-col items-center">
         <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-50 text-red-600 mb-2">S&P 500</span>
         <h2 class="text-xl font-bold text-slate-800 mb-4">S&P 500</h2>
@@ -63,7 +63,6 @@
 
         <div class="text-5xl font-black mt-3 text-slate-900" id="us-score">--</div>
         <span id="us-status" class="mt-2.5 text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700">중립</span>
-        <p class="mt-6 text-xs text-slate-400">CNN 공식 실시간 지표 (D1 연동)</p>
       </div>
 
       <!-- [카드 2] 코인 (BTC/ETH) -->
@@ -84,7 +83,6 @@
 
         <div class="text-5xl font-black mt-3 text-slate-900" id="crypto-score">--</div>
         <span id="crypto-status" class="mt-2.5 text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">탐욕</span>
-        <p class="mt-6 text-xs text-slate-400">Alternative.me 글로벌 크립토 지수</p>
       </div>
 
     </div>
@@ -128,26 +126,41 @@
       }
     }
 
+    // 날짜/시간 포맷 함수: YYYYMMDD HH:mm:ss
+    function formatDateTime(dateInput) {
+      const d = dateInput ? new Date(dateInput) : new Date();
+      if (isNaN(d.getTime())) return dateInput;
+
+      const pad = (n) => String(n).padStart(2, '0');
+      const year = d.getFullYear();
+      const month = pad(d.getMonth() + 1);
+      const day = pad(d.getDate());
+      const hours = pad(d.getHours());
+      const mins = pad(d.getMinutes());
+      const secs = pad(d.getSeconds());
+
+      return `${year}${month}${day} ${hours}:${mins}:${secs}`;
+    }
+
     async function fetchData() {
       try {
-        // 1. D1 DB에서 최신 S&P 500 공포탐욕지수 조회
         const res = await fetch(`/api/fgi?t=${Date.now()}`);
         if (!res.ok) throw new Error(`D1 API 응답 오류: ${res.status}`);
         const fgiData = await res.json();
 
-        // 2. 시간 업데이트
+        // 간략화된 날짜 시간 표기 (예: 20261017 13:16:34)
         const updatedAtEl = document.getElementById('updated-at');
         if (updatedAtEl) {
-          const dateStr = fgiData.date || new Date().toISOString().slice(0, 10);
-          updatedAtEl.textContent = `${dateStr} 기준 반영 완료`;
+          const rawTime = fgiData.updated_at || fgiData.date || new Date();
+          updatedAtEl.textContent = formatDateTime(rawTime);
           updatedAtEl.classList.remove('text-rose-500');
         }
 
-        // 3. S&P500 게이지 갱신 (D1 값)
+        // S&P500 게이지 갱신
         const usScore = Number(fgiData.score ?? 50);
         updateGauge('us', usScore);
 
-        // 4. 코인 게이지 (Alternative.me 실시간 보강)
+        // 코인 게이지
         try {
           const cryptoRes = await fetch('https://api.alternative.me/fng/?limit=1');
           if (cryptoRes.ok) {
@@ -165,7 +178,7 @@
         console.error("데이터 로드 실패:", err);
         const updatedAtEl = document.getElementById('updated-at');
         if (updatedAtEl) {
-          updatedAtEl.textContent = 'D1 DB 연결 확인 필요';
+          updatedAtEl.textContent = '연결 확인 필요';
           updatedAtEl.classList.add('text-rose-500');
         }
       }

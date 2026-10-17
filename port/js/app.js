@@ -1,10 +1,11 @@
 // port/js/app.js
 
 let currentAccount = 'ALL';
-let currentView = 'OVERVIEW'; // 💡 기본값을 '자산 현황(OVERVIEW)'으로 설정
+let currentView = 'OVERVIEW'; // 기본값을 '자산 현황(OVERVIEW)'으로 설정
 let cachedAccounts = [];
 let cachedHoldings = [];
 let cachedLogs = [];
+let cachedSummary = null;
 
 // 로컬에 캐시된 일간 등락률 가져오기
 function getStoredDailyRates() {
@@ -29,6 +30,7 @@ async function fetchD1Portfolio() {
         cachedAccounts = data.accounts || [];
         cachedHoldings = data.holdings || [];
         cachedLogs = data.logs || [];
+        cachedSummary = data.summary || {};
 
         // 1. 계좌 선택 드롭다운 채우기
         populateAccountOptions(cachedAccounts);
@@ -48,13 +50,57 @@ async function fetchD1Portfolio() {
             daily_change_rate: dailyRatesMap[h.ticker] !== undefined ? dailyRatesMap[h.ticker] : (h.daily_change_rate || 0)
         }));
 
-        // 5. 자산 비중 트리맵 차트 렌더링
+        // 5. 자산 비중 트리맵 차트 렌더링 (순수 주식 종목 대상)
         if (typeof renderTreemapChart === 'function') {
             renderTreemapChart(holdingsWithDaily);
         }
 
-        // 6. 화면 스위칭 및 테이블 렌더링
-        applyViewSwitching(holdingsWithDaily);
+        // 6. 종목 잔고 테이블용: 예수금(CASH)을 가상 종목으로 포함하여 총자산 비중 재계산
+        const totalNetWorth = Number(cachedSummary.netWorth) || 0;
+        const cashBalance = Number(cachedSummary.cashBalance) || 0;
+
+        let tableDisplayHoldings = holdingsWithDaily.map(item => {
+            const itemEval = Number(item.eval_amount) || 0;
+            // 총 순자산(주식평가금 + 예수금) 대비 비중 계산
+            const weightAgainstNetWorth = totalNetWorth > 0 ? ((itemEval / totalNetWorth) * 100).toFixed(2) : 0;
+            return {
+                ...item,
+                weight: weightAgainstNetWorth
+            };
+        });
+
+        // 예수금이 0원보다 크면 스프레드시트처럼 맨 아래 행에 예수금 종목 자동 추가
+        if (cashBalance > 0) {
+            const cashWeight = totalNetWorth > 0 ? ((cashBalance / totalNetWorth) * 100).toFixed(2) : 0;
+            
+            // 현재 선택된 계좌명 찾기
+            let accName = '전체 계좌';
+            if (currentAccount !== 'ALL') {
+                const found = cachedAccounts.find(a => a.account_id === currentAccount);
+                if (found) accName = found.account_name;
+            }
+
+            tableDisplayHoldings.push({
+                holding_id: 'CASH_VIRTUAL',
+                account_id: currentAccount,
+                account_name: accName,
+                ticker: '현금',
+                asset_name: '예수금 (원화)',
+                sector: '현금자산',
+                quantity: 1,
+                avg_buy_price: cashBalance,
+                current_price: cashBalance,
+                buy_amount: cashBalance,
+                eval_amount: cashBalance,
+                profit_amount: 0,
+                profit_rate: 0.00,
+                weight: cashWeight,
+                isCash: true
+            });
+        }
+
+        // 7. 화면 스위칭 및 테이블 렌더링
+        applyViewSwitching(tableDisplayHoldings);
 
     } catch (err) {
         console.error("D1 API 호출 에러:", err);
@@ -69,7 +115,7 @@ async function fetchD1Portfolio() {
     }
 }
 
-// 💡 [핵심] 자산현황 ↔ 상세 테이블 동적 전환(스위칭) 함수
+// 자산현황 ↔ 상세 테이블 동적 전환(스위칭) 함수
 function applyViewSwitching(holdingsData) {
     const overviewBox = document.getElementById('overviewContainer');
     const tableBox = document.getElementById('tableContainer');
@@ -132,7 +178,7 @@ function populateModalOptions(accounts, holdings) {
 
         const uniqueStocks = new Map();
         holdings.forEach(h => {
-            if (h.ticker && !uniqueStocks.has(h.ticker)) {
+            if (h.ticker && h.ticker !== '현금' && !uniqueStocks.has(h.ticker)) {
                 uniqueStocks.set(h.ticker, h.asset_name);
             }
         });

@@ -43,7 +43,8 @@ function getOrCreateTooltip() {
     return tip;
 }
 
-export function renderTreemapChart(holdings) {
+// 일반 스크립트 로드 환경을 위해 export 제거하고 브라우저 전역에 확실히 등록
+function renderTreemapChart(holdings) {
     lastTreemapHoldings = holdings;
     const container = document.getElementById('treemapChart');
     const subtitle = document.getElementById('treemapSubtitle');
@@ -257,7 +258,6 @@ export function renderTreemapChart(holdings) {
         const dailyColor = item.dailyRate >= 0 ? 'text-rose-400' : 'text-sky-400';
 
         if (item.isEtc) {
-            // 하단 내역: 종목명과 주식 내 비중(%)만 깔끔하게 표시
             const subListHtml = item.subItems.map(sub => `
                 <div class="flex justify-between items-center py-1 text-[11px] border-b border-slate-800/80 last:border-b-0 hover:bg-slate-800/40 px-1 rounded transition">
                     <span class="truncate max-w-[170px] text-slate-200">${sub.name}</span>
@@ -284,7 +284,6 @@ export function renderTreemapChart(holdings) {
                 </div>
             `;
 
-            // 모바일 및 고정 모달용 닫기 버튼 이벤트
             const btnClose = tooltip.querySelector('#btnTooltipClose');
             if (btnClose) {
                 btnClose.addEventListener('click', (e) => {
@@ -293,7 +292,6 @@ export function renderTreemapChart(holdings) {
                 });
             }
 
-            // 모바일 터치 스크롤 시 뒷배경이 따라 움직이지 않도록 내부 전파 차단
             const scrollBox = tooltip.querySelector('#tooltipScrollContainer');
             if (scrollBox) {
                 scrollBox.addEventListener('touchmove', (e) => {
@@ -302,7 +300,6 @@ export function renderTreemapChart(holdings) {
             }
 
         } else {
-            // 일반 단일 종목 툴팁
             tooltip.innerHTML = `
                 <div class="font-bold text-white text-xs mb-1.5 border-b border-slate-700 pb-1">${item.name} <span class="text-slate-400 font-normal">(${item.ticker})</span></div>
                 <div class="space-y-1 text-[11px]">
@@ -314,7 +311,6 @@ export function renderTreemapChart(holdings) {
             `;
         }
 
-        // 팝업 위치 잡기 (화면 벗어남 방지)
         let left = clientX + 12;
         let top = clientY + 12;
 
@@ -335,12 +331,10 @@ export function renderTreemapChart(holdings) {
         const item = rects[idx];
         if (!item) return;
 
-        // 1) 마우스 진입 (PC)
         tile.addEventListener('mouseenter', (e) => {
             showTooltipForItem(item, e.clientX, e.clientY);
         });
 
-        // 2) 마우스 이동 (PC: 툴팁으로 이동할 수 있도록 위치 고정 유지)
         tile.addEventListener('mousemove', (e) => {
             if (!item.isEtc) {
                 let left = e.clientX + 14;
@@ -352,7 +346,6 @@ export function renderTreemapChart(holdings) {
             }
         });
 
-        // 3) 마우스 떠남 (PC: 마우스가 툴팁으로 이동할 시간을 0.2초 제공)
         tile.addEventListener('mouseleave', () => {
             if (item.isEtc) {
                 tooltipHideTimeout = setTimeout(() => {
@@ -363,7 +356,6 @@ export function renderTreemapChart(holdings) {
             }
         });
 
-        // 4) 클릭 및 터치 (모바일 & PC 클릭 고정)
         tile.addEventListener('click', (e) => {
             e.stopPropagation();
             showTooltipForItem(item, e.clientX || window.innerWidth / 2 - 140, e.clientY || 150, true);
@@ -378,7 +370,7 @@ export function renderTreemapChart(holdings) {
     });
 }
 
-// [일간 / 누적] 탭 전환 이벤트 리스너
+// [일간 / 누적] 탭 전환 이벤트 리스너 (HTML 버튼 스타일과 모드 동기화)
 function setupTreemapModeTabs() {
     const buttons = document.querySelectorAll('.treemap-mode-btn');
     if (!buttons.length) return;
@@ -397,6 +389,10 @@ function setupTreemapModeTabs() {
         });
     });
 }
+
+// 브라우저 전역에 확실히 연결
+window.renderTreemapChart = renderTreemapChart;
+window.setupTreemapModeTabs = setupTreemapModeTabs;
 
 document.addEventListener('DOMContentLoaded', setupTreemapModeTabs);
 

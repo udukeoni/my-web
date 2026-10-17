@@ -1,7 +1,7 @@
 // port/js/components/treemapChart.js
 
 let lastTreemapHoldings = null;
-let currentTreemapMode = 'CUMULATIVE'; // 'CUMULATIVE'(누적) | 'DAILY'(일간)
+let currentTreemapMode = 'DAILY'; // 'DAILY'(일간) 기본 모드로 초기화
 let tooltipHideTimeout = null;
 
 // ETF 브랜드 접두사 축약 함수
@@ -43,7 +43,7 @@ function getOrCreateTooltip() {
     return tip;
 }
 
-function renderTreemapChart(holdings) {
+export function renderTreemapChart(holdings) {
     lastTreemapHoldings = holdings;
     const container = document.getElementById('treemapChart');
     const subtitle = document.getElementById('treemapSubtitle');

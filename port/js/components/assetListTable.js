@@ -1,10 +1,12 @@
 // port/js/components/assetListTable.js
+// 스프레드시트형 콤팩트 고밀도 테이블 렌더러 (밴드리밸런싱 최적화)
 
 const BASE_FIXED_TRADE_ID = 433; // 433번까지 고정 데이터 보호
 
 // 페이징 상태 변수
 let currentPage = 1;
-const PAGE_SIZE = 6; // 한 화면에 딱 맞게 6건씩 고정
+// 💡 한 화면에서 전 종목을 스프레드시트처럼 볼 수 있도록 기본 노출 건수를 대폭 확대 (최대 50건)
+let pageSize = 50; 
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
@@ -21,6 +23,8 @@ function renderDataTable(viewType, dataList) {
     if (currentViewType !== viewType) {
         currentPage = 1;
         currentViewType = viewType;
+        // 보유 종목은 한눈에 다 보이도록 50개, 거래원장은 15개로 설정
+        pageSize = (viewType === 'HOLDINGS') ? 50 : 15;
     }
     currentDataList = dataList || [];
 
@@ -31,16 +35,16 @@ function renderDataTable(viewType, dataList) {
         btnOpenModal = document.createElement('button');
         btnOpenModal.id = 'btnOpenTxModal';
         btnOpenModal.type = 'button';
-        btnOpenModal.className = 'hidden items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition shadow-sm active:scale-95';
+        btnOpenModal.className = 'hidden items-center gap-1.5 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-md transition shadow-sm active:scale-95';
         btnOpenModal.innerHTML = '<i class="fa-solid fa-plus text-[10px]"></i> 거래내역 입력';
         headerContainer.appendChild(btnOpenModal);
     }
 
     // ==========================================
-    // 1. 보유 종목 (HOLDINGS) 헤더 세팅
+    // 1. 보유 종목 (HOLDINGS) 스프레드시트형 콤팩트 헤더
     // ==========================================
     if (viewType === 'HOLDINGS') {
-        if (title) title.textContent = '보유 종목 상세';
+        if (title) title.textContent = '보유 종목 상세 (포트폴리오 비중)';
         if (badge) badge.textContent = `${currentDataList.length}종목`;
 
         if (btnOpenModal) {
@@ -49,14 +53,16 @@ function renderDataTable(viewType, dataList) {
         }
 
         thead.innerHTML = `
-            <tr>
-              <th class="py-2.5 px-4">종목명 / 계좌</th>
-              <th class="py-2.5 px-4 text-right">매수평균가</th>
-              <th class="py-2.5 px-4 text-right">현재가</th>
-              <th class="py-2.5 px-4 text-right">보유수량</th>
-              <th class="py-2.5 px-4 text-right">평가금액 (비중)</th>
-              <th class="py-2.5 px-4 text-right">평가손익</th>
-              <th class="py-2.5 px-4 text-right">수익률</th>
+            <tr class="bg-slate-100/90 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none">
+              <th class="py-1.5 px-3 whitespace-nowrap text-left">종목명</th>
+              <th class="py-1.5 px-2 whitespace-nowrap text-center">코드</th>
+              <th class="py-1.5 px-2.5 whitespace-nowrap text-right">매수평균가</th>
+              <th class="py-1.5 px-2.5 whitespace-nowrap text-right">현재가</th>
+              <th class="py-1.5 px-2 whitespace-nowrap text-right">수량</th>
+              <th class="py-1.5 px-3 whitespace-nowrap text-right bg-slate-200/50">평가금액</th>
+              <th class="py-1.5 px-2.5 whitespace-nowrap text-right bg-blue-50/60 text-blue-800">비중</th>
+              <th class="py-1.5 px-3 whitespace-nowrap text-right">평가손익</th>
+              <th class="py-1.5 px-2.5 whitespace-nowrap text-right">수익률</th>
             </tr>
         `;
 
@@ -84,98 +90,110 @@ function renderDataTable(viewType, dataList) {
         }
 
         thead.innerHTML = `
-            <tr>
-              <th class="py-2.5 px-4 whitespace-nowrap">거래일자</th>
-              <th class="py-2.5 px-4 whitespace-nowrap">계좌</th>
-              <th class="py-2.5 px-4 whitespace-nowrap">구분</th>
-              <th class="py-2.5 px-4">종목</th>
-              <th class="py-2.5 px-4 text-right whitespace-nowrap">수량</th>
-              <th class="py-2.5 px-4 text-right whitespace-nowrap">단가</th>
-              <th class="py-2.5 px-4 text-right whitespace-nowrap">정산금액</th>
-              <th class="py-2.5 px-4 text-right whitespace-nowrap">세금</th>
-              <th class="py-2.5 px-4">메모</th>
+            <tr class="bg-slate-100/90 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none">
+              <th class="py-1.5 px-3 whitespace-nowrap text-left">거래일자</th>
+              <th class="py-1.5 px-2.5 whitespace-nowrap text-left">계좌</th>
+              <th class="py-1.5 px-2 whitespace-nowrap text-center">구분</th>
+              <th class="py-1.5 px-3 whitespace-nowrap text-left">종목</th>
+              <th class="py-1.5 px-2.5 whitespace-nowrap text-right">수량</th>
+              <th class="py-1.5 px-2.5 whitespace-nowrap text-right">단가</th>
+              <th class="py-1.5 px-3 whitespace-nowrap text-right">정산금액</th>
+              <th class="py-1.5 px-2.5 whitespace-nowrap text-right">세금</th>
+              <th class="py-1.5 px-3 text-left">메모</th>
             </tr>
         `;
     }
 
-    // 💡 페이징 적용하여 현재 페이지의 6건만 렌더링
     renderPaginatedRows();
     updatePaginationControls();
 }
 
-// 6건 슬라이스 및 본문 출력 함수
+// 스프레드시트형 초슬림 본문 출력 함수
 function renderPaginatedRows() {
     const tbody = document.getElementById('tableBody');
     const mobileList = document.getElementById('mobileCardList');
     if (!tbody || !mobileList) return;
 
     if (!currentDataList || currentDataList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400">데이터가 없습니다.</td></tr>`;
-        mobileList.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm">데이터가 없습니다.</div>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-400 text-xs">데이터가 없습니다.</td></tr>`;
+        mobileList.innerHTML = `<div class="py-6 text-center text-slate-400 text-xs">데이터가 없습니다.</div>`;
         return;
     }
 
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    const pageItems = currentDataList.slice(startIndex, startIndex + PAGE_SIZE);
+    const startIndex = (currentPage - 1) * pageSize;
+    const pageItems = currentDataList.slice(startIndex, startIndex + pageSize);
 
     if (currentViewType === 'HOLDINGS') {
-        // [종목 잔고 본문]
+        // [스프레드시트형 1행 1종목 콤팩트 그리드]
         tbody.innerHTML = pageItems.map(item => {
             const isPositive = item.profit_amount >= 0;
-            const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
+            const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
             const sign = isPositive ? '+' : '';
 
             return `
-                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
-                  <td class="py-2.5 px-4">
-                    <div class="font-bold text-slate-900 leading-tight">${item.asset_name}</div>
-                    <div class="text-[11px] text-slate-400">${item.ticker} · ${item.account_name}</div>
+                <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight">
+                  <!-- 1. 종목명 (한 줄 유지) -->
+                  <td class="py-1.5 px-3 font-semibold text-slate-900 whitespace-nowrap">
+                    ${item.asset_name}
                   </td>
-                  <td class="py-2.5 px-4 text-right font-mono text-xs">₩${Number(item.avg_buy_price).toLocaleString()}</td>
-                  <td class="py-2.5 px-4 text-right font-mono text-xs font-medium">₩${Number(item.current_price).toLocaleString()}</td>
-                  <td class="py-2.5 px-4 text-right font-mono text-xs">${Number(item.quantity).toLocaleString()}주</td>
-                  <td class="py-2.5 px-4 text-right">
-                    <div class="font-bold text-xs">₩${Number(item.eval_amount).toLocaleString()}</div>
-                    <div class="text-[10px] text-slate-400">비중 ${item.weight}%</div>
+                  <!-- 2. 종목코드 -->
+                  <td class="py-1.5 px-2 text-center font-mono text-[10px] text-slate-400 whitespace-nowrap">
+                    ${item.ticker}
                   </td>
-                  <td class="py-2.5 px-4 text-right font-bold text-xs ${profitColor}">
+                  <!-- 3. 매수평균가 -->
+                  <td class="py-1.5 px-2.5 text-right font-mono text-slate-600 whitespace-nowrap">
+                    ₩${Number(item.avg_buy_price).toLocaleString()}
+                  </td>
+                  <!-- 4. 현재가 -->
+                  <td class="py-1.5 px-2.5 text-right font-mono font-medium text-slate-800 whitespace-nowrap">
+                    ₩${Number(item.current_price).toLocaleString()}
+                  </td>
+                  <!-- 5. 보유수량 -->
+                  <td class="py-1.5 px-2 text-right font-mono text-slate-700 whitespace-nowrap">
+                    ${Number(item.quantity).toLocaleString()}
+                  </td>
+                  <!-- 6. 현재평가금액 (강조 셀) -->
+                  <td class="py-1.5 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/60 whitespace-nowrap">
+                    ₩${Number(item.eval_amount).toLocaleString()}
+                  </td>
+                  <!-- 7. 비중 (스프레드시트 밴드 확인용 강조) -->
+                  <td class="py-1.5 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/30 whitespace-nowrap">
+                    ${item.weight}%
+                  </td>
+                  <!-- 8. 평가손익 -->
+                  <td class="py-1.5 px-3 text-right font-mono font-semibold ${profitColor} whitespace-nowrap">
                     ${sign}₩${Number(item.profit_amount).toLocaleString()}
                   </td>
-                  <td class="py-2.5 px-4 text-right font-bold text-xs ${profitColor}">
+                  <!-- 9. 손익률 -->
+                  <td class="py-1.5 px-2.5 text-right font-mono font-bold ${profitColor} whitespace-nowrap">
                     ${sign}${item.profit_rate}%
                   </td>
                 </tr>
             `;
         }).join('');
 
+        // 모바일 카드 뷰도 슬림하게 압축
         mobileList.innerHTML = pageItems.map(item => {
             const isPositive = item.profit_amount >= 0;
             const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
             const sign = isPositive ? '+' : '';
 
             return `
-                <div class="p-3 bg-white rounded-xl border border-slate-100 shadow-sm mb-2 text-xs">
-                    <div class="flex justify-between items-start mb-1.5">
-                        <div>
-                            <div class="font-bold text-slate-900">${item.asset_name}</div>
-                            <div class="text-[11px] text-slate-400">${item.ticker} · ${item.account_name}</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="font-bold text-slate-900">₩${Number(item.eval_amount).toLocaleString()}</div>
-                            <div class="text-[11px] font-bold ${profitColor}">${sign}${item.profit_rate}%</div>
-                        </div>
+                <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs">
+                    <div class="flex justify-between items-center mb-1">
+                        <div class="font-bold text-slate-900 truncate max-w-[190px]">${item.asset_name}</div>
+                        <div class="font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">${item.weight}%</div>
                     </div>
-                    <div class="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-50 text-[11px] text-slate-500">
-                        <div>매수 ₩${Number(item.avg_buy_price).toLocaleString()}</div>
-                        <div>현재 ₩${Number(item.current_price).toLocaleString()}</div>
-                        <div class="text-right">${Number(item.quantity).toLocaleString()}주 (${item.weight}%)</div>
+                    <div class="flex justify-between items-center text-[11px] text-slate-600">
+                        <span>평가 ₩${Number(item.eval_amount).toLocaleString()} (${Number(item.quantity).toLocaleString()}주)</span>
+                        <span class="font-bold ${profitColor}">${sign}${item.profit_rate}% (${sign}₩${Number(item.profit_amount).toLocaleString()})</span>
                     </div>
                 </div>
             `;
         }).join('');
 
     } else {
-        // [원장 거래 내역 본문]
+        // [원장 거래 내역 본문 - 슬림 콤팩트]
         tbody.innerHTML = pageItems.map(item => {
             let badgeStyle = "bg-slate-100 text-slate-700";
             if (item.trade_type === '매수') badgeStyle = "bg-red-50 text-red-600";
@@ -197,21 +215,20 @@ function renderPaginatedRows() {
             const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
 
             return `
-                <tr class="transition border-b border-slate-100 ${cursorClass} ${isEditable ? 'tx-editable-row' : ''}" data-tx="${isEditable ? itemJson : ''}">
-                  <td class="py-2.5 px-4 font-mono text-xs text-slate-600 whitespace-nowrap">${item.trade_date}</td>
-                  <td class="py-2.5 px-4 text-xs font-semibold text-slate-800 whitespace-nowrap">${item.account_name || item.account_id}</td>
-                  <td class="py-2.5 px-4 whitespace-nowrap">
-                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap inline-block ${badgeStyle}">${item.trade_type}</span>
+                <tr class="transition border-b border-slate-100 text-[11px] leading-tight ${cursorClass} ${isEditable ? 'tx-editable-row' : ''}" data-tx="${isEditable ? itemJson : ''}">
+                  <td class="py-1.5 px-3 font-mono text-slate-600 whitespace-nowrap">${item.trade_date}</td>
+                  <td class="py-1.5 px-2.5 font-medium text-slate-800 whitespace-nowrap">${item.account_name || item.account_id}</td>
+                  <td class="py-1.5 px-2 text-center whitespace-nowrap">
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap inline-block ${badgeStyle}">${item.trade_type}</span>
                   </td>
-                  <td class="py-2.5 px-4">
-                    <div class="font-bold text-slate-900 text-xs">${itemDisplayName}</div>
-                    ${item.ticker !== 'CASH' && item.trade_type !== '이자' ? `<div class="text-[10px] text-slate-400 font-mono">${item.ticker}</div>` : ''}
+                  <td class="py-1.5 px-3">
+                    <div class="font-bold text-slate-900 whitespace-nowrap">${itemDisplayName}</div>
                   </td>
-                  <td class="py-2.5 px-4 text-right font-mono text-xs whitespace-nowrap">${item.quantity ? Number(item.quantity).toLocaleString() + '주' : '-'}</td>
-                  <td class="py-2.5 px-4 text-right font-mono text-xs whitespace-nowrap">${item.unit_price ? '₩' + Number(item.unit_price).toLocaleString() : '-'}</td>
-                  <td class="py-2.5 px-4 text-right font-bold text-slate-900 text-xs whitespace-nowrap">₩${Number(item.settle_amount || 0).toLocaleString()}</td>
-                  <td class="py-2.5 px-4 text-right text-xs text-slate-500 whitespace-nowrap">${taxText}</td>
-                  <td class="py-2.5 px-4 text-xs text-slate-400 truncate max-w-[120px]">${item.memo || ''}</td>
+                  <td class="py-1.5 px-2.5 text-right font-mono whitespace-nowrap">${item.quantity ? Number(item.quantity).toLocaleString() : '-'}</td>
+                  <td class="py-1.5 px-2.5 text-right font-mono whitespace-nowrap">${item.unit_price ? '₩' + Number(item.unit_price).toLocaleString() : '-'}</td>
+                  <td class="py-1.5 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">₩${Number(item.settle_amount || 0).toLocaleString()}</td>
+                  <td class="py-1.5 px-2.5 text-right font-mono text-slate-500 whitespace-nowrap">${taxText}</td>
+                  <td class="py-1.5 px-3 text-slate-400 truncate max-w-[140px] whitespace-nowrap">${item.memo || ''}</td>
                 </tr>
             `;
         }).join('');
@@ -235,19 +252,19 @@ function renderPaginatedRows() {
             const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
 
             return `
-                <div class="p-3 bg-white rounded-xl border border-slate-100 shadow-sm mb-2 text-xs ${isEditable ? 'tx-editable-row' : ''}" data-tx="${isEditable ? itemJson : ''}">
+                <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs ${isEditable ? 'tx-editable-row' : ''}" data-tx="${isEditable ? itemJson : ''}">
                     <div class="flex justify-between items-center mb-1">
                         <div class="flex items-center gap-1.5">
                             <span class="font-bold text-slate-800">${item.account_name || item.account_id}</span>
-                            <span class="px-2 py-0.5 rounded font-bold text-[10px] whitespace-nowrap ${badgeStyle}">${item.trade_type}</span>
+                            <span class="px-1.5 py-0.5 rounded font-bold text-[10px] whitespace-nowrap ${badgeStyle}">${item.trade_type}</span>
                         </div>
-                        <div class="font-mono text-slate-400 text-[11px]">${item.trade_date}</div>
+                        <div class="font-mono text-slate-400 text-[10px]">${item.trade_date}</div>
                     </div>
-                    <div class="flex justify-between items-center font-medium my-0.5">
+                    <div class="flex justify-between items-center font-medium">
                         <span class="font-bold text-slate-900">${itemDisplayName}</span>
-                        <span class="font-extrabold text-slate-900">₩${Number(item.settle_amount || 0).toLocaleString()}</span>
+                        <span class="font-mono font-bold text-slate-900">₩${Number(item.settle_amount || 0).toLocaleString()}</span>
                     </div>
-                    <div class="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-50">
+                    <div class="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-50 mt-1">
                         <span>${item.memo || '-'}</span>
                         <span>${mobileTaxText}</span>
                     </div>
@@ -257,15 +274,27 @@ function renderPaginatedRows() {
     }
 }
 
-// 하단 페이징 버튼 및 셀렉트 박스 갱신 및 이벤트
+// 하단 페이징 버튼 및 셀렉트 박스 제어
 function updatePaginationControls() {
-    const totalPages = Math.ceil(currentDataList.length / PAGE_SIZE) || 1;
+    const totalPages = Math.ceil(currentDataList.length / pageSize) || 1;
     const select = document.getElementById('selectPage');
     const totalText = document.getElementById('totalPageText');
     const btnPrev = document.getElementById('btnPrevPage');
     const btnNext = document.getElementById('btnNextPage');
+    const paginationBar = document.getElementById('paginationBar');
 
     if (!select || !totalText || !btnPrev || !btnNext) return;
+
+    // 보유종목에서 한 페이지에 모두 담기면 페이징바 텍스트를 직관적으로 조정
+    if (currentViewType === 'HOLDINGS' && totalPages === 1) {
+        if (paginationBar) {
+            const pageInfoText = paginationBar.querySelector('.flex.items-center.gap-1\\.5 span');
+            if (pageInfoText) pageInfoText.textContent = `전체 ${currentDataList.length}개 종목 한눈에 보기`;
+        }
+    } else if (paginationBar) {
+        const pageInfoText = paginationBar.querySelector('.flex.items-center.gap-1\\.5 span');
+        if (pageInfoText) pageInfoText.textContent = `페이지당 ${pageSize}건`;
+    }
 
     totalText.textContent = `/ ${totalPages} 페이지`;
     select.innerHTML = '';
@@ -280,7 +309,6 @@ function updatePaginationControls() {
     btnPrev.disabled = (currentPage <= 1);
     btnNext.disabled = (currentPage >= totalPages);
 
-    // 이벤트 리스너 (중복 바인딩 방지 플래그 적용)
     if (!select.dataset.bound) {
         select.dataset.bound = "true";
         select.addEventListener('change', (e) => {
@@ -298,7 +326,7 @@ function updatePaginationControls() {
         });
 
         btnNext.addEventListener('click', () => {
-            const maxPage = Math.ceil(currentDataList.length / PAGE_SIZE) || 1;
+            const maxPage = Math.ceil(currentDataList.length / pageSize) || 1;
             if (currentPage < maxPage) {
                 currentPage++;
                 renderPaginatedRows();

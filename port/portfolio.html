@@ -23,24 +23,31 @@
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-  <main class="max-w-6xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
+  <main class="max-w-6xl mx-auto p-3 sm:p-6 space-y-3 sm:space-y-5">
     
-    <!-- 0. 상단 헤더 바: 공탐지수 / 포트폴리오 네비게이션 + 직접 연결된 로그아웃 버튼 -->
-    <header class="bg-white px-4 sm:px-6 py-3.5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
-      <h1 class="font-bold text-lg sm:text-xl text-slate-900">자산 대시보드</h1>
-      <nav class="flex items-center gap-3 sm:gap-4 text-sm font-medium">
-        <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition">공포탐욕지수</a>
+    <!-- 0. 상단 헤더 바 (모바일 줄바꿈 방지 및 반응형 콤팩트 디자인) -->
+    <header class="bg-white px-3.5 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between gap-2 select-none">
+      <!-- 좌측 타이틀: 모바일 줄바꿈 절대 방지 & 적정 크기 -->
+      <h1 class="font-bold text-base sm:text-xl text-slate-900 whitespace-nowrap tracking-tight">
+        자산 대시보드
+      </h1>
+
+      <!-- 우측 컨트롤: 모바일에서도 한 줄 정렬 유지 -->
+      <nav class="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium whitespace-nowrap">
+        <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition py-1">공포탐욕지수</a>
         <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-0.5 font-bold">포트폴리오</a>
+        
+        <!-- 반응형 로그아웃 버튼: 모바일은 심플 아이콘, PC는 아이콘+텍스트 -->
         <button id="btnLogout" type="button" onclick="handleAppLogout(event)" title="로그아웃" 
-                class="ml-1 text-slate-500 hover:text-red-600 text-xs px-2.5 py-1 rounded-md bg-slate-50 hover:bg-red-50 transition flex items-center gap-1.5 border border-slate-200 active:scale-95 cursor-pointer">
-          <i class="fa-solid fa-arrow-right-from-bracket"></i>
-          <span class="font-bold">로그아웃</span>
+                class="text-slate-500 hover:text-red-600 p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-50 hover:bg-red-50 transition flex items-center gap-1 border border-slate-200 active:scale-95 cursor-pointer">
+          <i class="fa-solid fa-arrow-right-from-bracket text-xs sm:text-[11px]"></i>
+          <span class="hidden sm:inline font-bold text-xs">로그아웃</span>
         </button>
       </nav>
     </header>
     
     <!-- 1. 상단 컨트롤 바: 계좌선택 + 현재가 동기화 + 6대 전환 탭 -->
-    <div class="bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
       <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
         <h2 class="font-bold text-slate-700 text-xs sm:text-sm whitespace-nowrap">내 자산 현황</h2>
         <select id="selectAccount" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -230,7 +237,7 @@
     </div>
   </div>
 
-  <!-- 💡 확실한 즉시 로그아웃 스크립트 -->
+  <!-- 즉시 로그아웃 스크립트 -->
   <script>
     async function handleAppLogout(e) {
       if (e) e.preventDefault();
@@ -239,14 +246,13 @@
       const btn = document.getElementById('btnLogout');
       if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>로그아웃 중...</span>';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
       }
 
       try {
         await fetch('/api/auth', { method: 'DELETE' });
       } catch (_) {}
 
-      // 브라우저 캐시 방지용 쿼리스트링과 함께 메인 화면으로 이동
       window.location.replace('../index.html?logout=' + Date.now());
     }
   </script>

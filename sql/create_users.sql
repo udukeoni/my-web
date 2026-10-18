@@ -2,7 +2,7 @@
 -- 1. 회원 마스터 테이블 (users)
 CREATE TABLE IF NOT EXISTS users (
     user_no INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT UNIQUE NOT NULL,             -- 영문/숫자 아이디 (특수문자 제외)
+    user_id TEXT UNIQUE NOT NULL,             -- 영문/숫자 아이디 (특수문자 원천 차단)
     password_hash TEXT NOT NULL,              -- SHA-256 단방향 암호화 해시
     nickname TEXT NOT NULL,                   -- 닉네임 (기본: 일개미, 개미_001 등)
     role TEXT DEFAULT 'USER',                 -- 권한: 'ADMIN' | 'USER'
@@ -20,18 +20,19 @@ CREATE TABLE IF NOT EXISTS login_logs (
     attempt_time TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
--- 3. 특수 보안 관리자 계정 등록
--- ID: ant_master84 / PW: sleepingdky98&( / 닉네임: 일개미
+-- 3. 특수문자 없는 순수 영문+숫자 보안 관리자 계정 등록
+-- ID: antmaster84 / PW: sleepingdky98&( / 닉네임: 일개미
 INSERT INTO users (user_no, user_id, password_hash, nickname, role, status)
 VALUES (
     1,
-    'ant_master84',
+    'antmaster84',
     'd60ae396e95267a0e36ce5662b1b369527ec5ec598f6e7fe9cbf67a7d57fa4c3',
     '일개미',
     'ADMIN',
     'ACTIVE'
 )
-ON CONFLICT(user_id) DO UPDATE SET
+ON CONFLICT(user_no) DO UPDATE SET
+    user_id = excluded.user_id,
     password_hash = excluded.password_hash,
     nickname = excluded.nickname,
     role = excluded.role;

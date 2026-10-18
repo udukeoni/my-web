@@ -25,12 +25,16 @@
 
   <main class="max-w-6xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
     
-    <!-- 0. 상단 헤더 바 (아래 컨트롤 바와 100% 동일한 너비와 둥근 카드 디자인) -->
+    <!-- 0. 상단 헤더 바: 공탐지수 / 포트폴리오 네비게이션 + 로그아웃 버튼 -->
     <header class="bg-white px-4 sm:px-6 py-3.5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
       <h1 class="font-bold text-lg sm:text-xl text-slate-900">자산 대시보드</h1>
-      <nav class="flex gap-4 text-sm font-medium">
+      <nav class="flex items-center gap-3 sm:gap-4 text-sm font-medium">
         <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition">공포탐욕지수</a>
-        <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-1 font-bold">포트폴리오</a>
+        <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-0.5 font-bold">포트폴리오</a>
+        <button id="btnLogout" title="로그아웃" class="ml-1 text-slate-400 hover:text-red-500 text-xs px-2 py-1 rounded-md hover:bg-slate-50 transition flex items-center gap-1 border border-slate-200">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          <span>로그아웃</span>
+        </button>
       </nav>
     </header>
     
@@ -72,12 +76,9 @@
 
     <!-- 2. 화면 중앙 전환 영역 A: [자산 현황] (총순자산 요약카드 + 자산비중 트리맵) -->
     <div id="overviewContainer" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-      <!-- 좌측: 총순자산 및 자산추이 카드 (5칸) -->
       <div id="summarySection" class="lg:col-span-5 h-full">
-        <!-- summaryCard.js에서 동적 렌더링 -->
       </div>
 
-      <!-- 우측: 자산 비중 트리맵 카드 (7칸) -->
       <div class="lg:col-span-7 bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between">
         <div class="flex justify-between items-center mb-2.5">
           <span class="font-bold text-slate-800 text-sm sm:text-base whitespace-nowrap">자산 비중</span>
@@ -86,12 +87,11 @@
             <button data-mode="CUMULATIVE" class="treemap-mode-btn px-2.5 py-1 rounded text-slate-500 hover:text-slate-800 transition">누적</button>
           </div>
         </div>
-        <!-- 트리맵 렌더링 영역 -->
         <div id="treemapChart" class="w-full flex-grow min-h-[310px]"></div>
       </div>
     </div>
 
-    <!-- 3. 화면 중앙 전환 영역 B: [종목 잔고 / 전체 내역 / 매매 / 배당 / 입출금] (기본 숨김: hidden) -->
+    <!-- 3. 화면 중앙 전환 영역 B: [종목 잔고 / 전체 내역 / 매매 / 배당 / 입출금] -->
     <div id="tableContainer" class="hidden bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
       <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -100,7 +100,6 @@
         </div>
       </div>
 
-      <!-- 데스크톱용 와이드 테이블 -->
       <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-left text-sm">
           <thead id="tableHead" class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200">
@@ -113,15 +112,13 @@
         </table>
       </div>
 
-      <!-- 모바일용 카드 리스트 뷰 -->
       <div id="mobileCardList" class="block md:hidden divide-y divide-slate-100 p-2">
         <div class="py-8 text-center text-slate-400 text-sm">데이터를 불러오는 중입니다...</div>
       </div>
 
-      <!-- 4. 하단 페이징(Pagination) 컨트롤 바 -->
       <div id="paginationBar" class="p-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 bg-slate-50/50">
         <div class="flex items-center gap-1.5">
-          <span>페이지당 6건</span>
+          <span>페이지당 50건</span>
         </div>
         <div class="flex items-center gap-2">
           <button id="btnPrevPage" class="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition">
@@ -145,8 +142,6 @@
   <!-- 거래내역 입력/수정/삭제 팝업 모달 -->
   <div id="txModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
-      
-      <!-- 헤더 -->
       <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
         <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
           <i id="txModalIcon" class="fa-solid fa-pen-to-square text-blue-600"></i>
@@ -157,7 +152,6 @@
         </button>
       </div>
 
-      <!-- 입력 폼 -->
       <form id="txForm" class="p-6 space-y-4 text-sm">
         <input type="hidden" id="txId" value="">
 
@@ -232,7 +226,6 @@
           </div>
         </div>
       </form>
-
     </div>
   </div>
 

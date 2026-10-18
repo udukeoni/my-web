@@ -1,5 +1,5 @@
 // functions/api/auth.js
-// 단방향 해시 검증, 접속 IP 감사 로깅, 브라우저 창 닫으면 자동 소멸되는 세션 쿠키 발급
+// 단방향 해시 검증, 접속 IP 감사 로깅, 1시간(3600초) 후 자동 파기 보안 세션 쿠키
 
 // Web Crypto API를 사용한 안전한 SHA-256 단방향 해싱 함수
 async function hashPassword(password) {
@@ -44,7 +44,6 @@ export async function onRequestPost(context) {
 
         // 계정이 없거나 비밀번호가 일치하지 않는 경우
         if (!user || user.password_hash !== hashedInputPw) {
-            // 해킹 추적용 실패 감사 로그 기록
             await db.prepare(`
                 INSERT INTO login_logs (user_id, ip_address, user_agent, login_status)
                 VALUES (?, ?, ?, 'FAIL')
@@ -71,8 +70,8 @@ export async function onRequestPost(context) {
         });
         const sessionToken = btoa(unescape(encodeURIComponent(sessionPayload)));
 
-        // 💡 [핵심] Max-Age를 아예 부여하지 않음으로써 브라우저 창을 닫으면 메모리에서 자동 소멸되는 세션 쿠키로 발급
-        const cookieHeader = `auth_token=${sessionToken}; Path=/; SameSite=Lax; Secure; HttpOnly`;
+        // 💡 1시간(3600초) 후 자동 소멸되는 보안 세션 쿠키 발급
+        const cookieHeader = `auth_token=${sessionToken}; Path=/; Max-Age=3600; SameSite=Lax; Secure; HttpOnly`;
 
         return new Response(JSON.stringify({
             success: true,
@@ -136,7 +135,7 @@ export async function onRequestGet(context) {
     }
 }
 
-// 3. 필요시 수동 로그아웃 지원 (DELETE)
+// 3. 로그아웃 처리 (DELETE) - 쿠키를 즉시 만료시켜 삭제
 export async function onRequestDelete() {
     const expireCookie = 'auth_token=; Path=/; Max-Age=0; SameSite=Lax; Secure; HttpOnly';
     return new Response(JSON.stringify({ success: true, message: '로그아웃 되었습니다.' }), {

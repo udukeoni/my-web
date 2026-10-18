@@ -28,7 +28,7 @@
         <p class="text-xs sm:text-sm text-slate-500 mt-1">S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
       </div>
       
-      <!-- 우측 컨트롤: 동기화 툴팁 버튼 + 포트폴리오 링크 -->
+      <!-- 우측 컨트롤: 동기화 툴팁 버튼 + 포트폴리오 접근 모달 버튼 -->
       <div class="flex items-center gap-1 sm:gap-2 text-sm text-slate-500 font-medium relative">
         
         <div class="relative flex items-center justify-center" id="sync-container">
@@ -37,9 +37,8 @@
             <i id="sync-icon" class="fa-solid fa-arrows-rotate text-slate-400 hover:text-slate-700 transition text-base"></i>
           </button>
           
-          <!-- 순수 시간 확인 미니 말풍선 (우측 끝 정렬로 모바일 잘림 방지, 갱신 버튼 없음) -->
+          <!-- 순수 시간 확인 미니 말풍선 -->
           <div id="sync-tooltip" class="absolute right-0 top-full mt-2 hidden flex-col items-end z-30 pointer-events-none transition duration-200">
-            <!-- 꼬리표 -->
             <div class="w-2.5 h-2.5 bg-slate-900 rotate-45 -mb-1 mr-3 border-l border-t border-slate-800"></div>
             <div class="bg-slate-900 text-white text-[11px] font-mono py-1.5 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-800">
               <span id="tooltip-time" class="text-slate-200">시간 확인 중...</span>
@@ -47,9 +46,10 @@
           </div>
         </div>
 
-        <a href="port/portfolio.html" class="p-2 opacity-40 hover:opacity-100 hover:bg-slate-100 rounded-lg transition" title="포트폴리오">
-          <i class="fa-solid fa-wallet text-slate-500 hover:text-blue-600 text-sm"></i>
-        </a>
+        <!-- 💡 포트폴리오 접근 지갑 버튼 (클릭 시 로그인 여부 검사 후 모달 또는 이동) -->
+        <button id="btn-portfolio-gate" onclick="handlePortfolioClick(event)" class="p-2 opacity-50 hover:opacity-100 hover:bg-slate-100 rounded-lg transition" title="포트폴리오">
+          <i class="fa-solid fa-wallet text-slate-500 hover:text-blue-600 text-base"></i>
+        </button>
       </div>
     </header>
 
@@ -99,12 +99,57 @@
     </div>
   </div>
 
+  <!-- 3. 콤팩트 보안 로그인 작은 팝업 모달 -->
+  <div id="login-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+      
+      <!-- 모달 상단 헤더 -->
+      <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 text-xs">
+            <i class="fa-solid fa-lock"></i>
+          </div>
+          <h3 class="font-bold text-slate-800 text-sm">잠자는 개미 보안 로그인</h3>
+        </div>
+        <button type="button" onclick="closeLoginModal()" class="text-slate-400 hover:text-slate-600 text-sm p-1 transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- 로그인 폼 -->
+      <form id="login-form" onsubmit="handleLoginSubmit(event)" class="p-5 space-y-3.5 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">아이디</label>
+          <input type="text" id="login-id" required autocomplete="username" placeholder="영문/숫자 아이디 입력"
+                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">비밀번호</label>
+          <input type="password" id="login-pw" required autocomplete="current-password" placeholder="비밀번호 입력"
+                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+        </div>
+
+        <!-- 오류 메시지 출력 영역 -->
+        <div id="login-error" class="hidden text-red-500 font-medium text-[11px] bg-red-50 p-2 rounded-md"></div>
+
+        <button type="submit" id="btn-login-submit"
+                class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold rounded-lg transition shadow-sm mt-1 text-xs">
+          인증 및 대시보드 입장
+        </button>
+
+        <p class="text-[10px] text-slate-400 text-center pt-1">
+          * 인가된 계정만 자산 대시보드 접근이 허용됩니다.
+        </p>
+      </form>
+    </div>
+  </div>
+
   <script>
     const ARC_LENGTH = 251.3;
     let autoCloseTimer = null;
     let isTooltipOpen = false;
 
-    // 마우스 호버 지원 PC 환경 판별
     const isHoverablePC = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
     function getTheme(score) {
@@ -181,9 +226,6 @@
       clearTimeout(autoCloseTimer);
     }
 
-    // 💡 [클릭 동작]
-    // PC: 클릭 시 즉시 동기화 실행
-    // 모바일: 1차 클릭(시간 말풍선 열기 + 2초 후 자동 닫힘) / 2차 클릭(열린 상태에서 누르면 동기화 실행)
     function handleSyncClick(e) {
       e.stopPropagation();
 
@@ -191,23 +233,18 @@
         executeSync();
       } else {
         if (!isTooltipOpen) {
-          // 1차 탭: 시간 말풍선 띄우기
           openTooltip();
-
-          // 2초 뒤 자동 닫힘 타이머
           clearTimeout(autoCloseTimer);
           autoCloseTimer = setTimeout(() => {
             closeTooltip();
           }, 2000);
         } else {
-          // 2차 탭: 열린 상태에서 다시 누르면 동기화 실행
           clearTimeout(autoCloseTimer);
           executeSync();
         }
       }
     }
 
-    // 실제 동기화 실행 함수
     async function executeSync() {
       const btn = document.getElementById('btn-sync');
       const icon = document.getElementById('sync-icon');
@@ -227,7 +264,6 @@
         if (btn) btn.disabled = false;
         if (icon) icon.classList.remove('fa-spin', 'text-blue-500');
 
-        // 동기화 완료 후 1.5초 뒤 말풍선 자동 닫기
         clearTimeout(autoCloseTimer);
         autoCloseTimer = setTimeout(() => {
           closeTooltip();
@@ -235,15 +271,104 @@
       }
     }
 
-    // 💡 화면 다른 곳 클릭/터치 시 말풍선 즉시 닫기
+    // -------------------------------------------------------------
+    // 💡 포트폴리오 접근 분기 & 작은 로그인 팝업 모달 제어 로직
+    // -------------------------------------------------------------
+    async function handlePortfolioClick(e) {
+      e.preventDefault();
+      try {
+        // 현재 브라우저의 로그인 상태 확인
+        const res = await fetch('/api/auth');
+        const data = await res.json();
+
+        if (data.loggedIn) {
+          // 이미 로그인되어 있으면 곧바로 포트폴리오로 입장
+          window.location.href = 'port/portfolio.html';
+        } else {
+          // 비로그인 상태면 작은 로그인 팝업 모달 열기
+          openLoginModal();
+        }
+      } catch (_) {
+        openLoginModal();
+      }
+    }
+
+    function openLoginModal() {
+      const modal = document.getElementById('login-modal');
+      const errBox = document.getElementById('login-error');
+      if (errBox) errBox.classList.add('hidden');
+      if (modal) {
+        modal.classList.remove('hidden');
+        const idInput = document.getElementById('login-id');
+        if (idInput) setTimeout(() => idInput.focus(), 100);
+      }
+    }
+
+    function closeLoginModal() {
+      const modal = document.getElementById('login-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    // 모달 바깥 어두운 배경 클릭 시 닫기
     document.addEventListener('click', (e) => {
-      const container = document.getElementById('sync-container');
-      if (container && !container.contains(e.target)) {
+      const modal = document.getElementById('login-modal');
+      if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+        closeLoginModal();
+      }
+
+      const syncContainer = document.getElementById('sync-container');
+      if (syncContainer && !syncContainer.contains(e.target)) {
         closeTooltip();
       }
     });
 
-    // PC 전용 호버 이벤트
+    // 로그인 폼 전송 핸들러
+    async function handleLoginSubmit(e) {
+      e.preventDefault();
+      const idInput = document.getElementById('login-id');
+      const pwInput = document.getElementById('login-pw');
+      const errBox = document.getElementById('login-error');
+      const btnSubmit = document.getElementById('btn-login-submit');
+
+      const user_id = idInput.value.trim();
+      const password = pwInput.value;
+
+      if (errBox) errBox.classList.add('hidden');
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = '인증 확인 중...';
+      }
+
+      try {
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id, password })
+        });
+        const result = await res.json();
+
+        if (result.success) {
+          // 로그인 성공 시 즉시 포트폴리오 대시보드로 이동!
+          window.location.href = 'port/portfolio.html';
+        } else {
+          if (errBox) {
+            errBox.textContent = result.error || '로그인에 실패했습니다.';
+            errBox.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (errBox) {
+          errBox.textContent = '서버 통신 오류: ' + err.message;
+          errBox.classList.remove('hidden');
+        }
+      } finally {
+        if (btnSubmit) {
+          btnSubmit.disabled = false;
+          btnSubmit.textContent = '인증 및 대시보드 입장';
+        }
+      }
+    }
+
     const syncContainer = document.getElementById('sync-container');
     if (syncContainer && isHoverablePC) {
       syncContainer.addEventListener('mouseenter', openTooltip);

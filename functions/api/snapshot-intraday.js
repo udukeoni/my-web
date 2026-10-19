@@ -1,4 +1,5 @@
 // functions/api/snapshot-intraday.js
+// 장중 실시간 자산 스냅샷 (전날 데이터 자동 청소 및 1시간 단위 안정 기록)
 
 export async function onRequestPost(context) {
     const { env } = context;
@@ -6,27 +7,30 @@ export async function onRequestPost(context) {
     try {
         const db = env.DB;
 
-        // 1. 현재 한국 시간(KST) 구하기
+        // 1. 현재 한국 시간(KST = UTC + 9) 계산
         const now = new Date();
         const kstTime = new Date(now.getTime() + (9 * 60 * 60 * 1000));
         const hours = kstTime.getUTCHours();
         const minutes = kstTime.getUTCMinutes();
+        const todayStr = kstTime.toISOString().split('T')[0]; // "2026-10-19"
         
-        // 💡 09:00 ~ 09:15 사이에 실행되면 무조건 깔끔하게 '09:00'을 시작점으로 강제 고정
         let timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-        const isMarketOpen = (hours === 9 && minutes <= 15);
-        if (isMarketOpen) {
+
+        // 09:00 ~ 09:10 사이 진입 시 깔끔하게 09:00 시작점으로 고정
+        if (hours === 9 && minutes <= 10) {
             timeStr = '09:00';
         }
 
         const statements = [];
 
-        // 2. 아침 개장 첫 실행 시(09:00) 전날 임시 데이터 자동 비우기
-        if (isMarketOpen) {
+        // 2. 💡 [핵심] 아침 개장 시간(08:50 ~ 09:35)에 첫 실행되면 전날 임시 데이터 완전 삭제
+        // 지연 실행이 발생하더라도 09시 시간대 첫 실행이면 전날 데이터를 깨끗이 비웁니다.
+        const isMorningReset = (hours === 9 && minutes <= 35) || (hours === 8 && minutes >= 50);
+        if (isMorningReset) {
             statements.push(db.prepare("DELETE FROM intraday_snapshots"));
         }
 
-        // 3. 각 계좌별 현재 보유 주식 평가금 및 매입원가 집계
+        // 3. 각 계좌별 현재 보유 주식 평가금 및 총 매입원가 집계
         const accHoldings = await db.prepare(`
             SELECT 
                 h.account_id,
@@ -80,9 +84,11 @@ export async function onRequestPost(context) {
 
         return new Response(JSON.stringify({
             success: true,
-            message: isMarketOpen ? "장 시작(09:00) 기준점 초기화 및 기록 완료" : "장중 자산 스냅샷 기록 완료",
+            message: "장중 자산 스냅샷 기록 완료",
             timeRecorded: timeStr,
-            isReset: isMarketOpen
+            date: todayStr,
+            isReset: isMorningReset,
+            totalNetWorth
         }), {
             headers: { "Content-Type": "application/json; charset=UTF-8", "Cache-Control": "no-cache" }
         });

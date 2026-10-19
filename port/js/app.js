@@ -1,4 +1,5 @@
 // port/js/app.js
+// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존 및 예수금(CASH) 통합 컨트롤러
 
 let currentAccount = 'ALL';
 let currentView = 'OVERVIEW'; // 기본값을 '자산 현황(OVERVIEW)'으로 설정
@@ -18,7 +19,6 @@ function getStoredDailyRates() {
 
 async function fetchD1Portfolio() {
     try {
-        // 자산 현황일 때도 테이블 데이터는 미리 불러와서 대기시킴
         const apiView = currentView === 'OVERVIEW' ? 'HOLDINGS' : currentView;
         const res = await fetch(`/api/portfolio?account=${currentAccount}&view=${apiView}`);
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
@@ -55,29 +55,47 @@ async function fetchD1Portfolio() {
             renderTreemapChart(holdingsWithDaily);
         }
 
-        // 6. 종목 잔고 테이블용: 예수금(CASH)을 가상 종목으로 포함하여 총자산 비중 재계산
+        // 6. 💡 [핵심] 리밸런싱 속성(target_weight, band_min/max 등)을 100% 온전히 유지하며 비중 재계산
         const totalNetWorth = Number(cachedSummary.netWorth) || 0;
         const cashBalance = Number(cachedSummary.cashBalance) || 0;
 
         let tableDisplayHoldings = holdingsWithDaily.map(item => {
             const itemEval = Number(item.eval_amount) || 0;
-            // 총 순자산(주식평가금 + 예수금) 대비 비중 계산
-            const weightAgainstNetWorth = totalNetWorth > 0 ? ((itemEval / totalNetWorth) * 100).toFixed(2) : 0;
+            const weightAgainstNetWorth = totalNetWorth > 0 ? Number(((itemEval / totalNetWorth) * 100).toFixed(2)) : 0;
             return {
-                ...item,
+                ...item, // 백엔드에서 계산된 target_weight, band_min, band_max, rebalance_status, diff_amount, adjust_shares 온전 유지
                 weight: weightAgainstNetWorth
             };
         });
 
-        // 예수금이 0원보다 크면 스프레드시트처럼 맨 아래 행에 예수금 종목 자동 추가
+        // 7. 예수금(CASH) 가상 종목 추가 시에도 리밸런싱 설정값 매핑
         if (cashBalance > 0) {
-            const cashWeight = totalNetWorth > 0 ? ((cashBalance / totalNetWorth) * 100).toFixed(2) : 0;
+            const cashWeight = totalNetWorth > 0 ? Number(((cashBalance / totalNetWorth) * 100).toFixed(2)) : 0;
             
-            // 현재 선택된 계좌명 찾기
             let accName = '전체 계좌';
             if (currentAccount !== 'ALL') {
                 const found = cachedAccounts.find(a => a.account_id === currentAccount);
                 if (found) accName = found.account_name;
+            }
+
+            // 미래-연금 계좌인 경우 예수금 목표 비중 10% (8%~12%) 자동 연동
+            let cashTargetWeight = null;
+            let cashBandMin = null;
+            let cashBandMax = null;
+            let cashStatus = '유지';
+            let cashDiffAmount = 0;
+
+            if (currentAccount === '미래-연금') {
+                cashTargetWeight = 10.0;
+                cashBandMin = 8.0;
+                cashBandMax = 12.0;
+
+                if (cashWeight < cashBandMin) cashStatus = '매수';
+                else if (cashWeight > cashBandMax) cashStatus = '매도';
+                else cashStatus = '유지';
+
+                const targetCashVal = totalNetWorth * 0.10;
+                cashDiffAmount = Math.round(targetCashVal - cashBalance);
             }
 
             tableDisplayHoldings.push({
@@ -95,11 +113,17 @@ async function fetchD1Portfolio() {
                 profit_amount: 0,
                 profit_rate: 0.00,
                 weight: cashWeight,
+                target_weight: cashTargetWeight,
+                band_min: cashBandMin,
+                band_max: cashBandMax,
+                rebalance_status: cashStatus,
+                diff_amount: cashDiffAmount,
+                adjust_shares: 0,
                 isCash: true
             });
         }
 
-        // 7. 화면 스위칭 및 테이블 렌더링
+        // 8. 화면 스위칭 및 테이블 렌더링
         applyViewSwitching(tableDisplayHoldings);
 
     } catch (err) {
@@ -107,7 +131,7 @@ async function fetchD1Portfolio() {
         const tbody = document.getElementById('tableBody');
         const mobileList = document.getElementById('mobileCardList');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-red-500">DB 연동 오류: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="14" class="py-8 text-center text-red-500">DB 연동 오류: ${err.message}</td></tr>`;
         }
         if (mobileList) {
             mobileList.innerHTML = `<div class="py-8 text-center text-red-500 text-sm">DB 연동 오류: ${err.message}</div>`;
@@ -121,11 +145,9 @@ function applyViewSwitching(holdingsData) {
     const tableBox = document.getElementById('tableContainer');
 
     if (currentView === 'OVERVIEW') {
-        // [자산 현황] 탭: 총자산 카드 + 자산 비중 트리맵 노출, 테이블 숨김
         if (overviewBox) overviewBox.classList.remove('hidden');
         if (tableBox) tableBox.classList.add('hidden');
     } else {
-        // [종목 잔고 / 전체 내역 / 매매 / 배당 / 입출금] 탭: 총자산/트리맵 닫고 테이블 노출
         if (overviewBox) overviewBox.classList.add('hidden');
         if (tableBox) tableBox.classList.remove('hidden');
 
@@ -217,7 +239,6 @@ function toggleQtyAndPriceFields() {
     }
 }
 
-// 탭 버튼 클릭 이벤트 (6대 탭 스타일 및 스위칭 제어)
 function setupTabButtons() {
     const tabButtons = document.querySelectorAll('.tab-btn');
     tabButtons.forEach(btn => {
@@ -233,7 +254,6 @@ function setupTabButtons() {
     });
 }
 
-// 거래내역 모달 이벤트
 function setupTxModal() {
     const modal = document.getElementById('txModal');
     const btnClose = document.getElementById('btnCloseTxModal');

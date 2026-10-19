@@ -55,7 +55,7 @@ async function fetchD1Portfolio() {
             renderTreemapChart(holdingsWithDaily);
         }
 
-        // 6. 💡 [핵심] 리밸런싱 속성(target_weight, band_min/max 등)을 100% 온전히 유지하며 비중 재계산
+        // 6. 리밸런싱 속성(target_weight, band_min/max 등)을 100% 온전히 유지하며 비중 재계산
         const totalNetWorth = Number(cachedSummary.netWorth) || 0;
         const cashBalance = Number(cachedSummary.cashBalance) || 0;
 
@@ -63,12 +63,12 @@ async function fetchD1Portfolio() {
             const itemEval = Number(item.eval_amount) || 0;
             const weightAgainstNetWorth = totalNetWorth > 0 ? Number(((itemEval / totalNetWorth) * 100).toFixed(2)) : 0;
             return {
-                ...item, // 백엔드에서 계산된 target_weight, band_min, band_max, rebalance_status, diff_amount, adjust_shares 온전 유지
+                ...item,
                 weight: weightAgainstNetWorth
             };
         });
 
-        // 7. 예수금(CASH) 가상 종목 추가 시에도 리밸런싱 설정값 매핑
+        // 7. 💡 [핵심 보강] 예수금(CASH) 가상 종목 추가 시 밴드리밸런싱 목표비중(10%) 완벽 연산
         if (cashBalance > 0) {
             const cashWeight = totalNetWorth > 0 ? Number(((cashBalance / totalNetWorth) * 100).toFixed(2)) : 0;
             
@@ -78,22 +78,31 @@ async function fetchD1Portfolio() {
                 if (found) accName = found.account_name;
             }
 
-            // 미래-연금 계좌인 경우 예수금 목표 비중 10% (8%~12%) 자동 연동
+            // 미래-연금 계좌(MIRAE_PENSION)인 경우 예수금 목표 비중 10% (8%~12%) 연산 매핑
             let cashTargetWeight = null;
             let cashBandMin = null;
             let cashBandMax = null;
             let cashStatus = '유지';
             let cashDiffAmount = 0;
 
-            if (currentAccount === '미래-연금') {
+            const isPensionAccount = (currentAccount === 'MIRAE_PENSION') || 
+                                     (accName && accName.includes('연금')) || 
+                                     (currentAccount && currentAccount.includes('연금'));
+
+            if (isPensionAccount) {
                 cashTargetWeight = 10.0;
                 cashBandMin = 8.0;
                 cashBandMax = 12.0;
 
-                if (cashWeight < cashBandMin) cashStatus = '매수';
-                else if (cashWeight > cashBandMax) cashStatus = '매도';
-                else cashStatus = '유지';
+                if (cashWeight < cashBandMin) {
+                    cashStatus = '매수'; // 현금 부족 -> 현금 확보(주식 매도 필요)
+                } else if (cashWeight > cashBandMax) {
+                    cashStatus = '매도'; // 현금 초과 -> 주식 매수 가능
+                } else {
+                    cashStatus = '유지';
+                }
 
+                // 목표 현금 금액 = 총 순자산 * 10%
                 const targetCashVal = totalNetWorth * 0.10;
                 cashDiffAmount = Math.round(targetCashVal - cashBalance);
             }
@@ -102,7 +111,7 @@ async function fetchD1Portfolio() {
                 holding_id: 'CASH_VIRTUAL',
                 account_id: currentAccount,
                 account_name: accName,
-                ticker: '현금',
+                ticker: 'CASH',
                 asset_name: '예수금 (원화)',
                 sector: '현금자산',
                 quantity: 1,
@@ -200,7 +209,7 @@ function populateModalOptions(accounts, holdings) {
 
         const uniqueStocks = new Map();
         holdings.forEach(h => {
-            if (h.ticker && h.ticker !== '현금' && !uniqueStocks.has(h.ticker)) {
+            if (h.ticker && h.ticker !== 'CASH' && h.ticker !== '현금' && !uniqueStocks.has(h.ticker)) {
                 uniqueStocks.set(h.ticker, h.asset_name);
             }
         });

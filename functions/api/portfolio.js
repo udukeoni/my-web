@@ -1,5 +1,5 @@
 // functions/api/portfolio.js
-// 계좌/보유종목/거래원장 및 시계열 차트 데이터 집계 + 자산배분 밴드리밸런싱 자동 연산
+// 계좌/보유종목/거래원장 집계 + 자산배분 밴드리밸런싱 연산 + 일간 자산추이(daily_snapshots) 연동
 
 export async function onRequestGet(context) {
     const { request, env } = context;
@@ -133,9 +133,7 @@ export async function onRequestGet(context) {
         const netProfitRate = totalAssetInvested > 0 ? Number(((totalProfit / totalAssetInvested) * 100).toFixed(2)) : 0;
         const cashWeight = netWorth > 0 ? Number(((targetCash / netWorth) * 100).toFixed(1)) : 0;
 
-        // -------------------------------------------------------------
-        // 💡 6. [신규] 리밸런싱 설정값 조회 및 계산 맵 구성
-        // -------------------------------------------------------------
+        // 6. 리밸런싱 설정값 조회 및 계산 맵 구성
         let rebalanceSettingsMap = new Map();
         try {
             const rebQuery = accountFilter === 'ALL'
@@ -153,10 +151,8 @@ export async function onRequestGet(context) {
         // 종목별 비중 및 밴드리밸런싱 자동 연산
         const holdingsWithWeight = holdings.map(item => {
             const currentEval = item.eval_amount || 0;
-            // 순자산(주식평가금 + 예수금) 대비 현재 비중 (%)
             const currentWeight = netWorth > 0 ? Number(((currentEval / netWorth) * 100).toFixed(2)) : 0;
 
-            // 리밸런싱 설정값 조회
             const settingKey = `${item.account_id}_${item.ticker}`;
             const setting = rebalanceSettingsMap.get(settingKey);
 
@@ -164,15 +160,14 @@ export async function onRequestGet(context) {
             let bandMin = null;
             let bandMax = null;
             let status = '미설정';
-            let diffAmount = 0;   // 목표 비중 달성을 위한 매수/매도 필요 금액
-            let adjustShares = 0; // 조정 주식 수
+            let diffAmount = 0;
+            let adjustShares = 0;
 
             if (setting) {
                 targetWeight = Number(setting.target_weight);
                 bandMin = Number(setting.band_min);
                 bandMax = Number(setting.band_max);
 
-                // 상태 판정: 하한 미달이면 '매수', 상한 초과면 '매도', 범위 안이면 '유지'
                 if (currentWeight < bandMin) {
                     status = '매수';
                 } else if (currentWeight > bandMax) {
@@ -181,12 +176,9 @@ export async function onRequestGet(context) {
                     status = '유지';
                 }
 
-                // 목표 금액 = 총 순자산 * (목표 비중 / 100)
                 const targetEval = netWorth * (targetWeight / 100);
-                // 매수/매도 필요 금액 = 목표 금액 - 현재 평가금액
                 diffAmount = Math.round(targetEval - currentEval);
 
-                // 조정 주식 수 = 필요 금액 / 현재가
                 if (item.current_price > 0) {
                     adjustShares = Math.round(diffAmount / item.current_price);
                 }
@@ -204,18 +196,10 @@ export async function onRequestGet(context) {
             };
         });
 
-        // 7. 자산 추이 그래프 데이터 조회
-        let intradayHistory = [];
+        // 7. 자산 추이 그래프 데이터 조회 (불필요한 intraday 제거, daily_snapshots만 조회)
         let dailyHistory = [];
 
         try {
-            const intraQuery = accountFilter === 'ALL'
-                ? "SELECT recorded_at, net_worth, invested FROM intraday_snapshots WHERE account_id = 'ALL' ORDER BY id ASC"
-                : "SELECT recorded_at, net_worth, invested FROM intraday_snapshots WHERE account_id = ? ORDER BY id ASC";
-            const intraStmt = db.prepare(intraQuery);
-            const intraRes = accountFilter === 'ALL' ? await intraStmt.all() : await intraStmt.bind(accountFilter).all();
-            intradayHistory = intraRes.results || [];
-
             const dailyQuery = accountFilter === 'ALL'
                 ? "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = 'ALL' ORDER BY snapshot_date ASC"
                 : "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = ? ORDER BY snapshot_date ASC";
@@ -244,7 +228,6 @@ export async function onRequestGet(context) {
             holdings: holdingsWithWeight,
             logs,
             chartData: {
-                intraday: intradayHistory,
                 daily: dailyHistory
             }
         }), {

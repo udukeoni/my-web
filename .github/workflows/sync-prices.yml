@@ -1,35 +1,21 @@
 # .github/workflows/sync-prices.yml
-name: 평일 장중 주가 및 자산 스냅샷 무인 동기화
+name: 평일 장마감 종가 동기화 및 일별 자산 스냅샷
 
 on:
   schedule:
-    # 1) 평일 장중 1시간 간격 실행 (한국 시간 09:05 ~ 15:05 매 시 5분 / UTC 00:05 ~ 06:05)
-    # 정각 트래픽 몰림 지연을 피하기 위해 5분에 실행
-    - cron: '5 0-6 * * 1-5'
-    
-    # 2) 평일 장마감 직후 최종 일별 스냅샷 (한국 시간 15:40 / UTC 06:40)
+    # 평일 장마감 직후 일 1회 실행 (한국 시간 15:40 / UTC 06:40)
     - cron: '40 6 * * 1-5'
 
   workflow_dispatch: # 필요 시 깃허브 웹에서 [Run workflow]로 수동 즉시 실행 가능
 
 jobs:
-  sync-intraday:
+  sync-daily:
     runs-on: ubuntu-latest
     steps:
-      - name: 네이버 주가 최신 시세 동기화
+      - name: 네이버 주가 최신 종가 동기화
         run: |
           curl -s -X POST "https://sleepingant.pages.dev/api/sync-prices"
 
-      - name: 장중 1시간 단위 실시간 자산 스냅샷 기록
+      - name: 당일 일별 최종 자산 영구 저장
         run: |
-          curl -s -X POST "https://sleepingant.pages.dev/api/snapshot-intraday"
-
-      - name: 장마감 시간대(15:30 이후)인 경우 일별 최종 자산 자동 영구 저장
-        run: |
-          # 현재 한국 시간(KST) 확인 후 15시 30분 이후이거나 수동 실행이면 마감 스냅샷 실행
-          KST_HOUR=$(TZ="Asia/Seoul" date +%H)
-          KST_MIN=$(TZ="Asia/Seoul" date +%M)
-          if [ "$KST_HOUR" -ge 15 ] && [ "$KST_MIN" -ge 30 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "장마감 시간 감지: 일별 최종 스냅샷 영구 저장 실행"
-            curl -s -X POST "https://sleepingant.pages.dev/api/snapshot-daily"
-          fi
+          curl -s -X POST "https://sleepingant.pages.dev/api/snapshot-daily"

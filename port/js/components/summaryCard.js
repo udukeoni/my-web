@@ -1,8 +1,8 @@
 // port/js/components/summaryCard.js
 
 let assetTrendChartInstance = null;
-// 변경할 코드 (기본 탭을 '당일'로 설정)
-let currentTrendPeriod = 'INTRADAY'; // 'INTRADAY'(당일) | '1M'(1개월) | '3M'(3개월) | 'ALL'(전체)
+// 기본 탭을 '1주(주간)'로 설정: '1W'(1주) | '1M'(1개월) | '3M'(3개월) | 'ALL'(전체)
+let currentTrendPeriod = '1W';
 let cachedChartData = null;
 
 function renderSummaryCard(data, chartData) {
@@ -43,7 +43,7 @@ function renderSummaryCard(data, chartData) {
                     </div>
                 </div>
                 
-                <!-- 하단 3대 지표 순서 변경: [주식 평가금] -> [총 매입원가] -> [예수금 (현금)] -->
+                <!-- 하단 3대 지표: [주식 평가금] -> [총 매입원가] -> [예수금 (현금)] -->
                 <div class="grid grid-cols-3 gap-2 py-2 px-2.5 bg-slate-50/80 rounded-lg text-xs border border-slate-100">
                     <!-- 1. 주식 평가금 -->
                     <div>
@@ -66,13 +66,13 @@ function renderSummaryCard(data, chartData) {
                 </div>
             </div>
 
-            <!-- 2. 하단 자산 추이 영역 (진짜 실데이터 연동) -->
+            <!-- 2. 하단 자산 추이 영역 (일간 스냅샷 기반 1주 / 1개월 / 3개월 / 전체) -->
             <div class="pt-3 mt-2 border-t border-slate-100 flex-grow flex flex-col justify-between">
                 <div class="flex justify-between items-center mb-1.5">
-                    <span id="btnSecretTrendHistory" class="font-bold text-slate-700 text-xs select-none">자산 추이</span>
-                    <!-- 기간 필터 탭: 당일(장중) / 1개월 / 3개월 / 전체 -->
+                    <span id="btnSecretTrendHistory" class="font-bold text-slate-700 text-xs select-none cursor-pointer hover:text-slate-900 transition">자산 추이</span>
+                    <!-- 기간 필터 탭: 1주(주간) / 1개월 / 3개월 / 전체 -->
                     <div id="trendPeriodTabs" class="flex gap-1 text-[10px] bg-slate-100 p-0.5 rounded-md">
-                        <button data-period="INTRADAY" class="trend-btn ${currentTrendPeriod === 'INTRADAY' ? 'bg-white font-bold text-slate-800 shadow-sm' : 'text-slate-500'} px-1.5 py-0.5 rounded transition">당일</button>
+                        <button data-period="1W" class="trend-btn ${currentTrendPeriod === '1W' ? 'bg-white font-bold text-slate-800 shadow-sm' : 'text-slate-500'} px-1.5 py-0.5 rounded transition">1주</button>
                         <button data-period="1M" class="trend-btn ${currentTrendPeriod === '1M' ? 'bg-white font-bold text-slate-800 shadow-sm' : 'text-slate-500'} px-1.5 py-0.5 rounded transition">1개월</button>
                         <button data-period="3M" class="trend-btn ${currentTrendPeriod === '3M' ? 'bg-white font-bold text-slate-800 shadow-sm' : 'text-slate-500'} px-1.5 py-0.5 rounded transition">3개월</button>
                         <button data-period="ALL" class="trend-btn ${currentTrendPeriod === 'ALL' ? 'bg-white font-bold text-slate-800 shadow-sm' : 'text-slate-500'} px-1.5 py-0.5 rounded transition">전체</button>
@@ -106,45 +106,35 @@ function renderAssetTrendChart() {
     let costSeries = [];
 
     const dailyData = (cachedChartData && cachedChartData.daily) ? cachedChartData.daily : [];
-    const intraData = (cachedChartData && cachedChartData.intraday) ? cachedChartData.intraday : [];
 
-    if (currentTrendPeriod === 'INTRADAY') {
-        // [당일] 장중 30분 시간별 데이터 (09:00 ~ 15:30)
-        if (intraData.length === 0) {
-            chartEl.innerHTML = `<div class="h-[160px] flex items-center justify-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200">장중 실시간 기록이 아직 없습니다. (09:00부터 수집)</div>`;
-            return;
-        }
-        categories = intraData.map(d => d.recorded_at);
-        netWorthSeries = intraData.map(d => d.net_worth);
-        costSeries = intraData.map(d => d.invested);
-
-    } else {
-        // [1M / 3M / ALL] 일별/주별 실제 과거 데이터 (엑셀 데이터 기반)
-        if (dailyData.length === 0) {
-            chartEl.innerHTML = `<div class="h-[160px] flex items-center justify-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200">기록된 과거 자산 데이터가 없습니다.</div>`;
-            return;
-        }
-
-        let filtered = [...dailyData];
-        if (currentTrendPeriod === '1M') {
-            // 최근 30일 이내
-            const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            filtered = dailyData.filter(d => d.snapshot_date >= cutoff);
-            if (filtered.length < 2) filtered = dailyData.slice(-5); // 최소 2개 이상 표시
-        } else if (currentTrendPeriod === '3M') {
-            // 최근 90일 이내
-            const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            filtered = dailyData.filter(d => d.snapshot_date >= cutoff);
-        }
-
-        // 날짜 형식 깔끔하게 포맷 (2026-08-20 -> 08.20)
-        categories = filtered.map(d => {
-            const parts = d.snapshot_date.split('-');
-            return parts.length === 3 ? `${parts[1]}.${parts[2]}` : d.snapshot_date;
-        });
-        netWorthSeries = filtered.map(d => d.net_worth);
-        costSeries = filtered.map(d => d.invested);
+    // 일별/주별 실제 과거 데이터 (D1 daily_snapshots 기반)
+    if (dailyData.length === 0) {
+        chartEl.innerHTML = `<div class="h-[160px] flex items-center justify-center text-slate-400 text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200">기록된 자산 데이터가 없습니다.</div>`;
+        return;
     }
+
+    let filtered = [...dailyData];
+    if (currentTrendPeriod === '1W') {
+        // [1주] 최근 7개 영업일(데이터)
+        filtered = dailyData.slice(-7);
+    } else if (currentTrendPeriod === '1M') {
+        // [1개월] 최근 30일 이내
+        const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        filtered = dailyData.filter(d => d.snapshot_date >= cutoff);
+        if (filtered.length < 2) filtered = dailyData.slice(-5); // 데이터 적을 때 최소 5개 보장
+    } else if (currentTrendPeriod === '3M') {
+        // [3개월] 최근 90일 이내
+        const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        filtered = dailyData.filter(d => d.snapshot_date >= cutoff);
+    }
+
+    // 날짜 형식 깔끔하게 포맷 (2026-10-20 -> 10.20)
+    categories = filtered.map(d => {
+        const parts = (d.snapshot_date || '').split('-');
+        return parts.length === 3 ? `${parts[1]}.${parts[2]}` : d.snapshot_date;
+    });
+    netWorthSeries = filtered.map(d => d.net_worth);
+    costSeries = filtered.map(d => d.invested);
 
     // Y축 단위 표기 (1억 이상은 '억', 1억 미만은 '만' 단위로 자동 전환)
     const yAxisFormatter = (val) => {
@@ -227,10 +217,10 @@ function setupTrendPeriodTabs() {
     });
 }
 
-// 쉿! 아는 사람만 누를 수 있는 '자산 추이' 히든 상세 이동 이벤트
+// 아는 사람만 누를 수 있는 '자산 추이' 히든 상세 이동 이벤트 보존
 document.addEventListener('click', (e) => {
     if (e.target && e.target.id === 'btnSecretTrendHistory') {
-        // 현재 선택된 기간(INTRADAY, 1M, 3M, ALL)을 가지고 상세 내역 페이지로 이동
-        window.location.href = `trend-history.html?period=${currentTrendPeriod}&account=${currentAccount}`;
+        const activeAccount = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
+        window.location.href = `trend-history.html?period=${currentTrendPeriod}&account=${activeAccount}`;
     }
 });

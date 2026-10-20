@@ -1,10 +1,10 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10건 자동 페이지네이션 지원)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10건 자동 페이징 + 계좌별 정확한 뷰 분기)
 
 const BASE_FIXED_TRADE_ID = 433; // 433번까지 고정 데이터 보호
 
 let currentPage = 1;
-let pageSize = 10; // 요청사항 반영: 종목 10개 단위로 자동 커트하여 페이지 분할
+let pageSize = 10; // 종목 10개 단위로 자동 커트
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
@@ -17,11 +17,9 @@ function renderDataTable(viewType, dataList) {
 
     if (!thead || !tbody || !mobileList) return;
 
-    if (currentViewType !== viewType) {
-        currentPage = 1;
-        currentViewType = viewType;
-    }
-    // 종목 잔고 및 원장 공통 10건 단위 페이징 통일
+    // 데이터나 탭이 변경될 때 무조건 1페이지로 안전 초기화
+    currentPage = 1;
+    currentViewType = viewType;
     pageSize = 10;
     currentDataList = dataList || [];
 
@@ -38,12 +36,15 @@ function renderDataTable(viewType, dataList) {
     }
 
     // ==========================================
-    // 1. 보유 종목 (HOLDINGS) 헤더 - 밴드리밸런싱 감지 분기
+    // 1. 보유 종목 (HOLDINGS) 헤더 세팅
+    // 💡 [핵심 버그 수정] '전체 계좌(ALL)'가 아닌 오직 '미래-연금(MIRAE_PENSION)'일 때만 밴드리밸런싱 와이드 헤더 적용!
     // ==========================================
     if (viewType === 'HOLDINGS') {
-        const hasRebalance = currentDataList.some(item => item.target_weight !== null && item.target_weight !== undefined);
+        const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
+        const isRebalanceAccount = (selectedAcc === 'MIRAE_PENSION') || 
+                                   (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        if (title) title.textContent = hasRebalance ? '자산배분 밴드리밸런싱 포트폴리오' : '보유 종목 상세';
+        if (title) title.textContent = isRebalanceAccount ? '자산배분 밴드리밸런싱 포트폴리오' : '보유 종목 상세';
         if (badge) badge.textContent = `${currentDataList.length}종목`;
 
         if (btnOpenModal) {
@@ -51,8 +52,8 @@ function renderDataTable(viewType, dataList) {
             btnOpenModal.classList.remove('inline-flex');
         }
 
-        if (hasRebalance) {
-            // [구글 스프레드시트 완전 동일] 밴드리밸런싱 전용 와이드 헤더
+        if (isRebalanceAccount) {
+            // [구글 스프레드시트 동일] 미래-연금 전용 14개 열 와이드 헤더
             thead.innerHTML = `
                 <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
                   <th class="py-2 px-3 text-left">종목명</th>
@@ -72,7 +73,7 @@ function renderDataTable(viewType, dataList) {
                 </tr>
             `;
         } else {
-            // 일반 계좌용 콤팩트 헤더
+            // 전체 계좌 종합 및 일반 계좌용 깔끔한 9개 열 헤더
             thead.innerHTML = `
                 <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
                   <th class="py-2 px-3 text-left">종목명</th>
@@ -136,25 +137,29 @@ function renderPaginatedRows() {
     if (!tbody || !mobileList) return;
 
     if (!currentDataList || currentDataList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="14" class="py-8 text-center text-slate-400 text-xs">데이터가 없습니다.</td></tr>`;
-        mobileList.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs">데이터가 없습니다.</div>`;
+        tbody.innerHTML = `<tr><td colspan="14" class="py-8 text-center text-slate-400 text-xs">보유 종목이 없습니다.</td></tr>`;
+        mobileList.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs">보유 종목이 없습니다.</div>`;
         return;
     }
+
+    const totalPages = Math.ceil(currentDataList.length / pageSize) || 1;
+    if (currentPage > totalPages) currentPage = 1;
 
     const startIndex = (currentPage - 1) * pageSize;
     const pageItems = currentDataList.slice(startIndex, startIndex + pageSize);
 
     if (currentViewType === 'HOLDINGS') {
-        const hasRebalance = currentDataList.some(item => item.target_weight !== null && item.target_weight !== undefined);
+        const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
+        const isRebalanceAccount = (selectedAcc === 'MIRAE_PENSION') || 
+                                   (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        if (hasRebalance) {
-            // [밴드리밸런싱 본문 렌더링]
+        if (isRebalanceAccount) {
+            // [미래-연금 전용 밴드리밸런싱 14개 열 본문]
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
                 const sign = isPositive ? '+' : '';
 
-                // 상태 뱃지 스타일
                 let statusBadge = '<span class="text-slate-400">-</span>';
                 if (item.rebalance_status === '유지') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 유지</span>';
@@ -164,7 +169,6 @@ function renderPaginatedRows() {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">🔴 매도</span>';
                 }
 
-                // 조정 수량 및 금액 표기
                 const diffAmt = Number(item.diff_amount || 0);
                 const diffSign = diffAmt > 0 ? '+' : '';
                 const diffColor = diffAmt > 0 ? 'text-blue-600 font-bold' : (diffAmt < 0 ? 'text-rose-600 font-bold' : 'text-slate-500');
@@ -193,10 +197,8 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 모바일용 밴드리밸런싱 전용 요약 카드
             mobileList.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
-                const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
                 const sign = isPositive ? '+' : '';
 
                 let statusBadge = '<span class="text-slate-400 text-[10px]">-</span>';
@@ -232,7 +234,7 @@ function renderPaginatedRows() {
             }).join('');
 
         } else {
-            // [일반 계좌 콤팩트 본문]
+            // [전체 계좌 종합 및 일반 계좌 콤팩트 본문: 9개 열 정상 출력]
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -365,11 +367,10 @@ function updatePaginationControls() {
 
     if (!select || !totalText || !btnPrev || !btnNext) return;
 
-    // 💡 [요청사항 반영] 하단 '전체 N개 종목 한눈에 보기' 문구 제거 및 빈칸 처리
     if (paginationBar) {
         const pageInfoContainer = paginationBar.querySelector('.flex.items-center.gap-1\\.5');
         if (pageInfoContainer) {
-            pageInfoContainer.innerHTML = ''; // 빈칸으로 깔끔하게 비움
+            pageInfoContainer.innerHTML = '';
         }
     }
 

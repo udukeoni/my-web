@@ -1,5 +1,5 @@
 // functions/api/portfolio.js
-// 계좌/보유종목/거래원장 집계 + 자산배분 밴드리밸런싱 연산 + 일간 자산추이(daily_snapshots) 연동
+// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 기준 회계 연산
 
 export async function onRequestGet(context) {
     const { request, env } = context;
@@ -27,7 +27,7 @@ export async function onRequestGet(context) {
             if (ast.ticker) assetNameMap[ast.ticker] = ast.asset_name;
         });
 
-        // 3. 보유 종목 상세 조회
+        // 3. 보유 종목 상세 조회 (total_buy_amount 정수 원금 기준)
         let holdingsQuery = `
             SELECT 
                 h.holding_id,
@@ -37,13 +37,38 @@ export async function onRequestGet(context) {
                 a.asset_name,
                 a.sector,
                 h.quantity,
-                h.avg_buy_price,
+                CASE 
+                    WHEN h.quantity > 0 AND h.total_buy_amount > 0 THEN (h.total_buy_amount * 1.0 / h.quantity)
+                    ELSE h.avg_buy_price 
+                END AS avg_buy_price,
                 a.current_price,
                 0 AS daily_change_rate,
-                (h.quantity * h.avg_buy_price) AS buy_amount,
-                (h.quantity * a.current_price) AS eval_amount,
-                ((h.quantity * a.current_price) - (h.quantity * h.avg_buy_price)) AS profit_amount,
-                ROUND(((a.current_price - h.avg_buy_price) * 100.0 / h.avg_buy_price), 2) AS profit_rate
+                CASE 
+                    WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
+                    ELSE ROUND(h.quantity * h.avg_buy_price) 
+                END AS buy_amount,
+                ROUND(h.quantity * a.current_price) AS eval_amount,
+                ROUND(h.quantity * a.current_price) - (
+                    CASE 
+                        WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
+                        ELSE ROUND(h.quantity * h.avg_buy_price) 
+                    END
+                ) AS profit_amount,
+                ROUND(
+                    (
+                        (h.quantity * a.current_price) - (
+                            CASE 
+                                WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
+                                ELSE (h.quantity * h.avg_buy_price) 
+                            END
+                        )
+                    ) * 100.0 / (
+                        CASE 
+                            WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
+                            ELSE (h.quantity * h.avg_buy_price) 
+                        END
+                    ), 2
+                ) AS profit_rate
             FROM holdings h
             JOIN accounts ac ON h.account_id = ac.account_id
             JOIN assets a ON h.ticker = a.ticker
@@ -114,7 +139,7 @@ export async function onRequestGet(context) {
             };
         });
 
-        // 5. 예수금 및 요약 집계
+        // 5. 예수금 및 요약 집계 (1원 단위 정수 보장)
         let targetCash = 0;
         if (accountFilter === 'ALL') {
             targetCash = accounts.reduce((acc, cur) => acc + (cur.cash_balance || 0), 0);
@@ -123,8 +148,8 @@ export async function onRequestGet(context) {
             targetCash = foundAcc ? (foundAcc.cash_balance || 0) : 0;
         }
 
-        const totalStockEval = holdings.reduce((acc, cur) => acc + (cur.eval_amount || 0), 0);
-        const totalInvested = holdings.reduce((acc, cur) => acc + (cur.buy_amount || 0), 0);
+        const totalStockEval = Math.round(holdings.reduce((acc, cur) => acc + (cur.eval_amount || 0), 0));
+        const totalInvested = Math.round(holdings.reduce((acc, cur) => acc + (cur.buy_amount || 0), 0));
         const totalProfit = totalStockEval - totalInvested;
         const netWorth = totalStockEval + targetCash;
 
@@ -196,9 +221,8 @@ export async function onRequestGet(context) {
             };
         });
 
-        // 7. 자산 추이 그래프 데이터 조회 (불필요한 intraday 제거, daily_snapshots만 조회)
+        // 7. 자산 추이 그래프 데이터 조회
         let dailyHistory = [];
-
         try {
             const dailyQuery = accountFilter === 'ALL'
                 ? "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = 'ALL' ORDER BY snapshot_date ASC"

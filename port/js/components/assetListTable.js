@@ -1,7 +1,7 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10건 자동 페이징 + 계좌별 정확한 뷰 분기)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10건 자동 페이징 + 계좌별 정확한 뷰 분기 + 평단가 반올림 표기)
 
-const BASE_FIXED_TRADE_ID = 0; // 초기화
+const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
 let currentPage = 1;
 let pageSize = 10; // 종목 10개 단위로 자동 커트
@@ -64,7 +64,7 @@ function renderDataTable(viewType, dataList) {
                   <th class="py-2 px-3 text-right bg-slate-200/50">평가금액</th>
                   <th class="py-2 px-2.5 text-right">손익률</th>
                   <th class="py-2 px-2.5 text-right bg-blue-50/70 text-blue-900 border-l border-blue-100">현재비중</th>
-                  <th class="py-2 px-2 text-right bg-emerald-50/70 text-emerald-900">목표비중</th>
+                  <th class="py-2 px-2.5 text-right bg-emerald-50/70 text-emerald-900">목표비중</th>
                   <th class="py-2 px-2 text-right text-slate-500">밴드하한</th>
                   <th class="py-2 px-2 text-right text-slate-500">밴드상한</th>
                   <th class="py-2 px-2.5 text-center bg-slate-200/60">상태 확인</th>
@@ -182,12 +182,12 @@ function renderPaginatedRows() {
                       <td class="py-2 px-3 font-semibold text-slate-900">${item.asset_name}</td>
                       <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">${item.ticker}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
-                      <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Number(item.avg_buy_price).toLocaleString()}</td>
+                      <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Math.round(Number(item.avg_buy_price || 0)).toLocaleString()}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/70">₩${Number(item.eval_amount).toLocaleString()}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/40 border-l border-blue-50">${item.weight}%</td>
-                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${item.target_weight !== null ? item.target_weight + '%' : '-'}</td>
+                      <td class="py-2 px-2.5 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${item.target_weight !== null ? item.target_weight + '%' : '-'}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_min !== null ? item.band_min.toFixed(2) + '%' : '-'}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_max !== null ? item.band_max.toFixed(2) + '%' : '-'}</td>
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
@@ -198,9 +198,6 @@ function renderPaginatedRows() {
             }).join('');
 
             mobileList.innerHTML = pageItems.map(item => {
-                const isPositive = Number(item.profit_amount || 0) >= 0;
-                const sign = isPositive ? '+' : '';
-
                 let statusBadge = '<span class="text-slate-400 text-[10px]">-</span>';
                 if (item.rebalance_status === '유지') {
                     statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">✅ 유지</span>';
@@ -244,7 +241,7 @@ function renderPaginatedRows() {
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
                       <td class="py-2 px-3 font-semibold text-slate-900">${item.asset_name}</td>
                       <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">${item.ticker}</td>
-                      <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Number(item.avg_buy_price).toLocaleString()}</td>
+                      <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Math.round(Number(item.avg_buy_price || 0)).toLocaleString()}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/60">₩${Number(item.eval_amount).toLocaleString()}</td>

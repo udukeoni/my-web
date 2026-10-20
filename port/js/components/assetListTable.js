@@ -1,5 +1,5 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10건 자동 페이징 + 계좌별 정확한 뷰 분기 + 평단가 반올림 표기)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (매수+, 매도- 부호 명확화 및 slate-500 색상 통일)
 
 const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
@@ -37,7 +37,6 @@ function renderDataTable(viewType, dataList) {
 
     // ==========================================
     // 1. 보유 종목 (HOLDINGS) 헤더 세팅
-    // 💡 [핵심 버그 수정] '전체 계좌(ALL)'가 아닌 오직 '미래-연금(MIRAE_PENSION)'일 때만 밴드리밸런싱 와이드 헤더 적용!
     // ==========================================
     if (viewType === 'HOLDINGS') {
         const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
@@ -68,8 +67,8 @@ function renderDataTable(viewType, dataList) {
                   <th class="py-2 px-2 text-right text-slate-500">밴드하한</th>
                   <th class="py-2 px-2 text-right text-slate-500">밴드상한</th>
                   <th class="py-2 px-2.5 text-center bg-slate-200/60">상태 확인</th>
-                  <th class="py-2 px-3 text-right bg-amber-50/70 text-amber-900 border-l border-amber-100">매수/매도액</th>
-                  <th class="py-2 px-2.5 text-right bg-amber-50/70 text-amber-900">조정 주식 수</th>
+                  <th class="py-2 px-3 text-right bg-slate-50 text-slate-700 border-l border-slate-200">매수/매도액</th>
+                  <th class="py-2 px-2.5 text-right bg-slate-50 text-slate-700">조정 주식 수</th>
                 </tr>
             `;
         } else {
@@ -169,13 +168,26 @@ function renderPaginatedRows() {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">🔴 매도</span>';
                 }
 
+                // 💡 [요청사항 반영] 매수(+), 매도(-) 부호 표기 & 밴드 상하한과 동일한 text-slate-500 폰트색 통일
                 const diffAmt = Number(item.diff_amount || 0);
-                const diffSign = diffAmt > 0 ? '+' : '';
-                const diffColor = diffAmt > 0 ? 'text-blue-600 font-bold' : (diffAmt < 0 ? 'text-rose-600 font-bold' : 'text-slate-500');
+                let diffText = '₩0';
+                if (diffAmt > 0) {
+                    diffText = `+₩${diffAmt.toLocaleString()}`;
+                } else if (diffAmt < 0) {
+                    diffText = `-₩${Math.abs(diffAmt).toLocaleString()}`;
+                }
 
                 const adjShares = Number(item.adjust_shares || 0);
-                const adjSign = adjShares > 0 ? '+' : '';
-                const adjText = (item.isCash || !item.current_price) ? '-' : `${adjSign}${adjShares.toLocaleString()}주`;
+                let adjText = '-';
+                if (!item.isCash && item.current_price > 0) {
+                    if (adjShares > 0) {
+                        adjText = `+${adjShares.toLocaleString()}주`;
+                    } else if (adjShares < 0) {
+                        adjText = `-${Math.abs(adjShares).toLocaleString()}주`;
+                    } else {
+                        adjText = '0주';
+                    }
+                }
 
                 return `
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
@@ -187,12 +199,13 @@ function renderPaginatedRows() {
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/70">₩${Number(item.eval_amount).toLocaleString()}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/40 border-l border-blue-50">${item.weight}%</td>
-                      <td class="py-2 px-2.5 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${item.target_weight !== null ? item.target_weight + '%' : '-'}</td>
+                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${item.target_weight !== null ? item.target_weight + '%' : '-'}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_min !== null ? item.band_min.toFixed(2) + '%' : '-'}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_max !== null ? item.band_max.toFixed(2) + '%' : '-'}</td>
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
-                      <td class="py-2 px-3 text-right font-mono ${diffColor} bg-amber-50/20 border-l border-amber-50">${diffAmt !== 0 ? `${diffSign}₩${Math.abs(diffAmt).toLocaleString()}` : '₩0'}</td>
-                      <td class="py-2 px-2.5 text-right font-mono font-bold ${diffColor} bg-amber-50/20">${adjText}</td>
+                      <!-- 파란색/빨간색을 제거하고 밴드 상하한과 동일한 text-slate-500 통일 -->
+                      <td class="py-2 px-3 text-right font-mono font-medium text-slate-500 border-l border-slate-100">${diffText}</td>
+                      <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-500">${adjText}</td>
                     </tr>
                 `;
             }).join('');
@@ -208,9 +221,16 @@ function renderPaginatedRows() {
                 }
 
                 const diffAmt = Number(item.diff_amount || 0);
-                const diffSign = diffAmt > 0 ? '+' : '';
-                const diffColor = diffAmt > 0 ? 'text-blue-600' : (diffAmt < 0 ? 'text-rose-600' : 'text-slate-500');
-                const adjText = (item.isCash || !item.current_price) ? '' : `(${item.adjust_shares > 0 ? '+' : ''}${item.adjust_shares}주)`;
+                let diffText = '₩0';
+                if (diffAmt > 0) diffText = `+₩${diffAmt.toLocaleString()}`;
+                else if (diffAmt < 0) diffText = `-₩${Math.abs(diffAmt).toLocaleString()}`;
+
+                const adjShares = Number(item.adjust_shares || 0);
+                let adjText = '';
+                if (!item.isCash && item.current_price > 0) {
+                    if (adjShares > 0) adjText = `(+${adjShares.toLocaleString()}주)`;
+                    else if (adjShares < 0) adjText = `(-${Math.abs(adjShares).toLocaleString()}주)`;
+                }
 
                 return `
                     <div class="py-2.5 px-3 bg-white border-b border-slate-100 text-xs">
@@ -224,7 +244,7 @@ function renderPaginatedRows() {
                         </div>
                         <div class="flex justify-between items-center text-[11px] pt-1 border-t border-slate-50">
                             <span class="text-slate-400">밴드 ${item.band_min || 0}% ~ ${item.band_max || 0}%</span>
-                            <span class="font-bold ${diffColor}">조정 ${diffSign}₩${Number(diffAmt).toLocaleString()} ${adjText}</span>
+                            <span class="font-medium text-slate-500">조정 ${diffText} ${adjText}</span>
                         </div>
                     </div>
                 `;

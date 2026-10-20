@@ -1,5 +1,5 @@
 // port/js/app.js
-// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 및 세후 정산금/세금 연동
+// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식(종목 정밀 매칭 및 세후 정산금 연동)
 
 let currentAccount = 'ALL';
 let currentView = 'OVERVIEW'; // 기본값을 '자산 현황(OVERVIEW)'으로 설정
@@ -271,7 +271,7 @@ function setupTabButtons() {
     });
 }
 
-// 💡 거래내역 모달 및 OCR 파싱 연동 컨트롤러
+// 거래내역 모달 및 OCR 파싱 연동 컨트롤러
 function setupTxModal() {
     const modal = document.getElementById('txModal');
     const btnClose = document.getElementById('btnCloseTxModal');
@@ -337,7 +337,6 @@ function setupTxModal() {
                 if (inputPrice) inputPrice.value = item.unit_price || '';
                 if (inputAmount) inputAmount.value = item.settle_amount || '';
 
-                // 💡 [버그 수정 2] DB의 fee 컬럼 값을 정확히 읽어와 세금 필드에 바인딩
                 const loadedTax = (item.fee !== undefined && item.fee !== null) ? item.fee : (item.tax || 0);
                 if (inputTax) inputTax.value = Number(loadedTax);
 
@@ -360,7 +359,6 @@ function setupTxModal() {
         selectType.addEventListener('change', toggleQtyAndPriceFields);
     }
 
-    // 폼 저장 제출 (신규 등록 및 수정)
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -443,7 +441,7 @@ function setupTxModal() {
     }
 }
 
-// 💡 브라우저 클라이언트 OCR 엔진 및 텍스트 자동 파싱
+// 브라우저 클라이언트 OCR 엔진 및 텍스트 자동 파싱
 function setupOcrEngine() {
     const fileInput = document.getElementById('ocrFileInput');
     if (!fileInput) return;
@@ -491,13 +489,16 @@ function setupOcrEngine() {
     });
 }
 
+// 💡 텍스트 정밀 매칭 및 입력 폼 자동 채우기
 function populateFieldsFromOcr(rawText) {
+    // 모든 줄바꿈과 연속 공백을 단일 공백으로 치환하고, 비교용 노이즈 제거 텍스트 생성
     const cleanText = rawText.replace(/\s+/g, ' ');
+    const noSpaceText = rawText.replace(/[\s\r\n\t\-_:：]/g, ''); // 띄어쓰기/특수문자 100% 제거 문자열
 
     // 1. 계좌 식별 (80-0, 40-0, -14, -01, -15, -05)
     let detectedAccountId = '';
     for (const rule of ACCOUNT_OCR_MAP) {
-        if (cleanText.includes(rule.pattern)) {
+        if (cleanText.includes(rule.pattern) || noSpaceText.includes(rule.pattern.replace(/[^0-9a-zA-Z]/g, ''))) {
             detectedAccountId = rule.accountId;
             break;
         }
@@ -513,21 +514,49 @@ function populateFieldsFromOcr(rawText) {
         detectedDate = `${y}-${m}-${d}`;
     }
 
-    // 3. 종목(티커) 파싱 (미래에셋: 'A495050' / 삼성증권 종목명 매칭)
+    // 3. 💡 [핵심 버그 수정] 종목(티커) 정밀 정규화 매칭 알고리즘
     let detectedTicker = '';
+    let detectedName = '';
+
+    // 3-1) 미래에셋 영문+숫자 6자리 코드 우선 탐색 (예: A495050, A441640, A0008S0)
     const tickerMatch = cleanText.match(/A([0-9A-Z]{6})/i);
     if (tickerMatch) {
         detectedTicker = tickerMatch[1].toUpperCase();
     } else {
+        // 3-2) 삼성증권 종목명 정밀 다중 키워드 매칭
         const stockSelect = document.getElementById('txStock');
         if (stockSelect) {
-            for (let i = 0; i < stockSelect.options.length; i++) {
-                const optText = stockSelect.options[i].text.replace(/\s+/g, '');
-                if (cleanText.includes('미국배당커버드콜') && optText.includes('미국배당커버드콜')) {
-                    detectedTicker = stockSelect.options[i].value;
+            // 주요 ETF 패턴 맵핑 테이블 (공백/오타 무관 정규화)
+            const targetKeywords = [
+                { pattern: /200.*(?:타겟|타켓)?.*위클리/i, name: 'KODEX 200타겟위클리커버드콜' },
+                { pattern: /미국배당.*커버드콜.*액티브/i, name: 'KODEX 미국배당커버드콜액티브' },
+                { pattern: /미국배당.*다우존스.*타겟/i, name: 'TIGER 미국배당다우존스타겟데일리커버드' },
+                { pattern: /미국나스닥.*100.*타겟/i, name: 'TIGER 미국나스닥100타겟데일리커버드콜' },
+                { pattern: /미국AI.*밸류체인/i, name: 'RISE 미국AI밸류체인데일리고정커버드콜' },
+                { pattern: /국제금.*커버드콜/i, name: 'SOL 국제금커버드콜액티브' },
+                { pattern: /30년.*국채.*커버드콜/i, name: 'SOL 미국30년국채커버드콜(합성)' },
+                { pattern: /코리아.*밸류업/i, name: 'RISE 코리아밸류업' },
+                { pattern: /미국.*S&P.*500/i, name: 'KODEX 미국S&P500' }
+            ];
+
+            let matchedKeywordName = '';
+            for (const item of targetKeywords) {
+                if (item.pattern.test(noSpaceText) || item.pattern.test(cleanText)) {
+                    matchedKeywordName = item.name;
                     break;
-                } else if (cleanText.includes('200타겟위클리') && optText.includes('200타겟위클리')) {
-                    detectedTicker = stockSelect.options[i].value;
+                }
+            }
+
+            // 드롭다운 옵션 중에서 일치하는 종목의 티커(value) 추출
+            for (let i = 0; i < stockSelect.options.length; i++) {
+                const optVal = stockSelect.options[i].value;
+                const optText = stockSelect.options[i].text.replace(/[\s\r\n\t\-_:：]/g, '');
+
+                if (optVal === 'CASH' || optVal === 'INTEREST') continue; // 원화현금/이자는 매칭에서 원천 배제
+
+                if (matchedKeywordName && optText.includes(matchedKeywordName.replace(/[\s\r\n\t\-_:：]/g, ''))) {
+                    detectedTicker = optVal;
+                    detectedName = stockSelect.options[i].text.split('(')[0].trim();
                     break;
                 }
             }
@@ -547,14 +576,12 @@ function populateFieldsFromOcr(rawText) {
         totalTax = incTax + locTax;
     }
 
-    // 5. 💡 [요청사항 1 반영] 금액 파싱 및 세후 정산금액 자동 산출
-    // 알림톡에 세후 분배금액이 명시된 경우 우선 추출
+    // 5. 금액 파싱 및 세후 정산금액 산출 (실제 내 계좌에 들어오는 순입금액)
     let netSettleAmount = 0;
     const netMatch = cleanText.match(/세후\s*분배금액\s*[:：]?\s*([\d,]+)\s*원/);
     if (netMatch) {
         netSettleAmount = Number(netMatch[1].replace(/,/g, '')) || 0;
     } else {
-        // 세전 금액 추출 후 세금을 뺀 실입금액(정산금액) 계산
         const grossMatch = cleanText.match(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([\d,]+)\s*원/);
         if (grossMatch) {
             const gross = Number(grossMatch[1].replace(/,/g, '')) || 0;
@@ -562,7 +589,7 @@ function populateFieldsFromOcr(rawText) {
         }
     }
 
-    // 모달창 필드에 자동 채우기
+    // 모달창 필드에 자동 주입
     const inputDate = document.getElementById('txDate');
     const selectAcc = document.getElementById('txAccount');
     const selectType = document.getElementById('txType');
@@ -575,12 +602,22 @@ function populateFieldsFromOcr(rawText) {
     if (inputDate) inputDate.value = detectedDate;
     if (selectAcc && detectedAccountId) selectAcc.value = detectedAccountId;
     if (selectType) selectType.value = '분배금';
-    if (selectStock && detectedTicker) selectStock.value = detectedTicker;
     
-    // 정산금액(세후 입금액) 및 세금 주입
+    // 💡 종목이 정상 인식되었을 때만 선택하고, 없으면 빈값으로 두어 사용자가 선택하도록 유도 (현금 오매핑 원천 방어)
+    if (selectStock) {
+        if (detectedTicker) {
+            selectStock.value = detectedTicker;
+        }
+    }
+    
     if (inputAmount) inputAmount.value = netSettleAmount || '';
     if (inputTax) inputTax.value = totalTax;
-    if (inputMemo) inputMemo.value = '이미지 OCR 자동 인식 분배금';
+
+    const monthStr = detectedDate.split('-')[1] || '';
+    const cleanMonth = monthStr ? Number(monthStr) + '월 ' : '';
+    if (inputMemo) {
+        inputMemo.value = detectedName ? `${detectedName} ${cleanMonth}분배금` : '분배금 입금';
+    }
 
     if (modalTitle) {
         modalTitle.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-emerald-600 mr-1.5"></i> 이미지 인식 완료 (확인 후 저장)';

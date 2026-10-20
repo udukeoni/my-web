@@ -9,8 +9,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
   <link rel="stylesheet" href="css/dashboard.css">
-  <!-- 차트 라이브러리 CDN -->
+  <!-- 차트 라이브러리 및 브라우저 클라이언트 OCR 엔진 (Tesseract.js) CDN -->
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     body { font-family: 'Pretendard', sans-serif; }
     .apexcharts-tooltip {
@@ -25,19 +26,16 @@
 
   <main class="max-w-6xl mx-auto p-3 sm:p-6 space-y-3 sm:space-y-5">
     
-    <!-- 0. 상단 헤더 바 (모바일 줄바꿈 방지 및 반응형 콤팩트 디자인) -->
+    <!-- 0. 상단 헤더 바 -->
     <header class="bg-white px-3.5 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between gap-2 select-none">
-      <!-- 좌측 타이틀: 모바일 줄바꿈 절대 방지 & 적정 크기 -->
       <h1 class="font-bold text-base sm:text-xl text-slate-900 whitespace-nowrap tracking-tight">
         자산 대시보드
       </h1>
 
-      <!-- 우측 컨트롤: 모바일에서도 한 줄 정렬 유지 -->
       <nav class="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium whitespace-nowrap">
         <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition py-1">공포탐욕지수</a>
         <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-0.5 font-bold">포트폴리오</a>
         
-        <!-- 반응형 로그아웃 버튼: 모바일은 심플 아이콘, PC는 아이콘+텍스트 -->
         <button id="btnLogout" type="button" onclick="handleAppLogout(event)" title="로그아웃" 
                 class="text-slate-500 hover:text-red-600 p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-50 hover:bg-red-50 transition flex items-center gap-1 border border-slate-200 active:scale-95 cursor-pointer">
           <i class="fa-solid fa-arrow-right-from-bracket text-xs sm:text-[11px]"></i>
@@ -46,7 +44,7 @@
       </nav>
     </header>
     
-    <!-- 1. 상단 컨트롤 바: 계좌선택 + 현재가 동기화 + 6대 전환 탭 -->
+    <!-- 1. 상단 컨트롤 바 -->
     <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
       <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
         <h2 class="font-bold text-slate-700 text-xs sm:text-sm whitespace-nowrap">내 자산 현황</h2>
@@ -59,7 +57,7 @@
         </button>
       </div>
 
-      <!-- 6대 뷰 모드 전환 탭 (자산 현황 탭 기본 활성화) -->
+      <!-- 6대 뷰 모드 전환 탭 -->
       <div id="viewTabs" class="grid grid-cols-6 sm:flex sm:items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs sm:text-sm font-medium w-full sm:w-auto">
         <button data-view="OVERVIEW" class="tab-btn w-full text-center px-1 sm:px-2.5 py-1.5 rounded-lg transition bg-white shadow-sm text-blue-600 font-bold whitespace-nowrap">
           <span class="sm:hidden">현황</span><span class="hidden sm:inline">자산 현황</span>
@@ -82,11 +80,9 @@
       </div>
     </div>
 
-    <!-- 2. 화면 중앙 전환 영역 A: [자산 현황] (총순자산 요약카드 + 자산비중 트리맵) -->
+    <!-- 2. 화면 중앙 전환 영역 A: [자산 현황] -->
     <div id="overviewContainer" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-      <div id="summarySection" class="lg:col-span-5 h-full">
-      </div>
-
+      <div id="summarySection" class="lg:col-span-5 h-full"></div>
       <div class="lg:col-span-7 bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between">
         <div class="flex justify-between items-center mb-2.5">
           <span class="font-bold text-slate-800 text-sm sm:text-base whitespace-nowrap">자산 비중</span>
@@ -99,19 +95,22 @@
       </div>
     </div>
 
-    <!-- 3. 화면 중앙 전환 영역 B: [종목 잔고 / 전체 내역 / 매매 / 배당 / 입출금] -->
+    <!-- 3. 화면 중앙 전환 영역 B: [종목 잔고 / 거래원장] -->
     <div id="tableContainer" class="hidden bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
       <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
         <div class="flex items-center gap-2">
           <h3 id="tableTitle" class="font-bold text-slate-800 text-base sm:text-lg">보유 종목 상세</h3>
           <span id="dataCountBadge" class="bg-blue-50 text-blue-600 text-xs font-semibold px-2.5 py-0.5 rounded-full">0건</span>
         </div>
+        <!-- 우측 액션 버튼: 기존 단독 [+ 거래내역 입력] 버튼 유지 -->
+        <button id="btnOpenTxModal" type="button" class="hidden items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition shadow-sm active:scale-95">
+          <i class="fa-solid fa-plus text-[10px]"></i> 거래내역 입력
+        </button>
       </div>
 
       <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-left text-sm">
-          <thead id="tableHead" class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200">
-          </thead>
+          <thead id="tableHead" class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200"></thead>
           <tbody id="tableBody" class="divide-y divide-slate-100">
             <tr>
               <td colspan="9" class="py-8 text-center text-slate-400">데이터를 불러오는 중입니다...</td>
@@ -125,9 +124,7 @@
       </div>
 
       <div id="paginationBar" class="p-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 bg-slate-50/50">
-        <div class="flex items-center gap-1.5">
-          <span>페이지당 50건</span>
-        </div>
+        <div class="flex items-center gap-1.5"></div>
         <div class="flex items-center gap-2">
           <button id="btnPrevPage" class="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition">
             <i class="fa-solid fa-chevron-left mr-1"></i>이전
@@ -146,6 +143,23 @@
     </div>
 
   </main>
+
+  <!-- 숨김 파일 입력창 (알림톡 캡처 이미지 선택) -->
+  <input type="file" id="ocrFileInput" accept="image/*" class="hidden">
+
+  <!-- OCR 처리 진행 상태 안내 오버레이 -->
+  <div id="ocrLoadingOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] hidden flex flex-col items-center justify-center p-4">
+    <div class="bg-white rounded-2xl p-6 shadow-2xl flex flex-col items-center max-w-xs text-center border border-slate-100 animate-in fade-in zoom-in duration-150">
+      <div class="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl mb-3">
+        <i class="fa-solid fa-wand-magic-sparkles fa-bounce"></i>
+      </div>
+      <h4 class="font-bold text-slate-900 text-sm mb-1">알림톡 이미지 분석 중</h4>
+      <p id="ocrProgressText" class="text-xs text-slate-500 mb-3">글자를 인식하고 있습니다... (0%)</p>
+      <div class="w-48 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+        <div id="ocrProgressBar" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-200" style="width: 0%"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- 거래내역 입력/수정/삭제 팝업 모달 -->
   <div id="txModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
@@ -208,7 +222,7 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">정산금액 (원) <span class="text-red-500">*</span></label>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">정산금액 (세전 분배금/총액) <span class="text-red-500">*</span></label>
             <input type="number" id="txAmount" required placeholder="예: 150000" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-blue-600">
           </div>
           <div>
@@ -222,9 +236,15 @@
           <input type="text" id="txMemo" placeholder="예: 정기 매수, 분배금 입금 등" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
 
-        <div class="pt-2 flex items-center justify-between border-t border-slate-100">
-          <div>
-            <button type="button" id="btnDeleteTx" class="hidden px-3.5 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold transition text-xs flex items-center gap-1.5 active:scale-95">
+        <!-- 하단 버튼 영역: [좌측: 이미지 업로드 버튼 + 삭제 버튼] / [우측: 취소, 내역 저장] -->
+        <div class="pt-3 flex items-center justify-between border-t border-slate-100">
+          <div class="flex items-center gap-2">
+            <!-- 💡 요청하신 거래내역 입력창 좌측 하단 [이미지 업로드] 버튼 -->
+            <button type="button" id="btnModalOcrUpload" class="px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold transition text-xs flex items-center gap-1.5 active:scale-95 shadow-sm">
+              <i class="fa-solid fa-camera text-emerald-600"></i>
+              <span>이미지 업로드</span>
+            </button>
+            <button type="button" id="btnDeleteTx" class="hidden px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold transition text-xs flex items-center gap-1.5 active:scale-95">
               <i class="fa-solid fa-trash-can"></i> 삭제하기
             </button>
           </div>

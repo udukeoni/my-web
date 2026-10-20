@@ -1,5 +1,5 @@
 // port/js/app.js
-// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존 및 예수금(CASH) 통합 컨트롤러
+// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 자동 채우기 연동
 
 let currentAccount = 'ALL';
 let currentView = 'OVERVIEW'; // 기본값을 '자산 현황(OVERVIEW)'으로 설정
@@ -7,6 +7,16 @@ let cachedAccounts = [];
 let cachedHoldings = [];
 let cachedLogs = [];
 let cachedSummary = null;
+
+// 사용자 지정 증권사 계좌번호 식별 매핑 규칙
+const ACCOUNT_OCR_MAP = [
+    { pattern: '80-0', accountId: 'MIRAE_PENSION', name: '미래-연금' },
+    { pattern: '40-0', accountId: 'MIRAE_01', name: '미래에셋' },
+    { pattern: '-14', accountId: 'SAMSUNG_ISA', name: '삼성-ISA' },
+    { pattern: '-01', accountId: 'SAMSUNG_GEN', name: '삼성-일반' },
+    { pattern: '-15', accountId: 'SAMSUNG_PENSION', name: '삼성-연금' },
+    { pattern: '-05', accountId: 'SAMSUNG_CMA', name: '삼성-CMA' }
+];
 
 // 로컬에 캐시된 일간 등락률 가져오기
 function getStoredDailyRates() {
@@ -55,7 +65,7 @@ async function fetchD1Portfolio() {
             renderTreemapChart(holdingsWithDaily);
         }
 
-        // 6. 리밸런싱 속성(target_weight, band_min/max 등)을 100% 온전히 유지하며 비중 재계산
+        // 6. 리밸런싱 속성(target_weight, band_min/max 등)을 온전히 유지하며 비중 재계산
         const totalNetWorth = Number(cachedSummary.netWorth) || 0;
         const cashBalance = Number(cachedSummary.cashBalance) || 0;
 
@@ -68,7 +78,7 @@ async function fetchD1Portfolio() {
             };
         });
 
-        // 7. 💡 [핵심 보강] 예수금(CASH) 가상 종목 추가 시 밴드리밸런싱 목표비중(10%) 완벽 연산
+        // 7. 예수금(CASH) 가상 종목 추가 시 밴드리밸런싱 연산 보존
         if (cashBalance > 0) {
             const cashWeight = totalNetWorth > 0 ? Number(((cashBalance / totalNetWorth) * 100).toFixed(2)) : 0;
             
@@ -78,7 +88,6 @@ async function fetchD1Portfolio() {
                 if (found) accName = found.account_name;
             }
 
-            // 미래-연금 계좌(MIRAE_PENSION)인 경우 예수금 목표 비중 10% (8%~12%) 연산 매핑
             let cashTargetWeight = null;
             let cashBandMin = null;
             let cashBandMax = null;
@@ -95,14 +104,13 @@ async function fetchD1Portfolio() {
                 cashBandMax = 12.0;
 
                 if (cashWeight < cashBandMin) {
-                    cashStatus = '매수'; // 현금 부족 -> 현금 확보(주식 매도 필요)
+                    cashStatus = '매수';
                 } else if (cashWeight > cashBandMax) {
-                    cashStatus = '매도'; // 현금 초과 -> 주식 매수 가능
+                    cashStatus = '매도';
                 } else {
                     cashStatus = '유지';
                 }
 
-                // 목표 현금 금액 = 총 순자산 * 10%
                 const targetCashVal = totalNetWorth * 0.10;
                 cashDiffAmount = Math.round(targetCashVal - cashBalance);
             }
@@ -263,6 +271,7 @@ function setupTabButtons() {
     });
 }
 
+// 💡 거래내역 모달 및 OCR 파싱 연동 컨트롤러
 function setupTxModal() {
     const modal = document.getElementById('txModal');
     const btnClose = document.getElementById('btnCloseTxModal');
@@ -283,6 +292,16 @@ function setupTxModal() {
     const inputTax = document.getElementById('txTax');
     const inputMemo = document.getElementById('txMemo');
 
+    // 모달 좌측 하단 이미지 업로드 버튼 및 파일 인풋
+    const btnModalOcr = document.getElementById('btnModalOcrUpload');
+    const fileInput = document.getElementById('ocrFileInput');
+
+    if (btnModalOcr && fileInput) {
+        btnModalOcr.addEventListener('click', () => {
+            fileInput.click();
+        });
+    }
+
     const closeModal = () => {
         if (modal) modal.classList.add('hidden');
     };
@@ -298,6 +317,7 @@ function setupTxModal() {
             if (modalTitle) modalTitle.textContent = '거래내역 직접 입력';
             if (submitBtn) submitBtn.textContent = '내역 저장';
             if (btnDelete) btnDelete.classList.add('hidden');
+            if (btnModalOcr) btnModalOcr.classList.remove('hidden');
             toggleQtyAndPriceFields();
             if (modal) modal.classList.remove('hidden');
         }
@@ -322,6 +342,7 @@ function setupTxModal() {
                 if (modalTitle) modalTitle.textContent = '거래내역 수정 / 삭제';
                 if (submitBtn) submitBtn.textContent = '수정 완료';
                 if (btnDelete) btnDelete.classList.remove('hidden');
+                if (btnModalOcr) btnModalOcr.classList.add('hidden'); // 수정 모드일 때는 업로드 버튼 숨김
 
                 toggleQtyAndPriceFields();
                 if (modal) modal.classList.remove('hidden');
@@ -335,6 +356,7 @@ function setupTxModal() {
         selectType.addEventListener('change', toggleQtyAndPriceFields);
     }
 
+    // 폼 저장 제출 (신규 등록 및 수정)
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -417,6 +439,145 @@ function setupTxModal() {
     }
 }
 
+// 💡 브라우저 클라이언트 OCR 엔진 및 텍스트 자동 파싱
+function setupOcrEngine() {
+    const fileInput = document.getElementById('ocrFileInput');
+    if (!fileInput) return;
+
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        const overlay = document.getElementById('ocrLoadingOverlay');
+        const progressText = document.getElementById('ocrProgressText');
+        const progressBar = document.getElementById('ocrProgressBar');
+
+        if (overlay) overlay.classList.remove('hidden');
+        if (progressText) progressText.textContent = '이미지 분석 엔진 준비 중...';
+        if (progressBar) progressBar.style.width = '10%';
+
+        try {
+            if (typeof Tesseract === 'undefined') {
+                throw new Error('OCR 엔진 라이브러리를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');
+            }
+
+            // 한국어 + 영어 동시 판독
+            const { data: { text } } = await Tesseract.recognize(
+                file,
+                'kor+eng',
+                {
+                    logger: m => {
+                        if (m.status === 'recognizing text' && progressBar) {
+                            const pct = Math.round(m.progress * 100);
+                            progressBar.style.width = `${pct}%`;
+                            progressText.textContent = `글자를 판독하는 중입니다... (${pct}%)`;
+                        }
+                    }
+                }
+            );
+
+            // 읽어낸 텍스트를 분석하여 모달 필드에 주입
+            populateFieldsFromOcr(text);
+
+        } catch (err) {
+            console.error('OCR 실패:', err);
+            alert('이미지 인식 중 오류가 발생했습니다: ' + err.message);
+        } finally {
+            if (overlay) overlay.classList.add('hidden');
+            fileInput.value = ''; // 재선택 가능하도록 초기화
+        }
+    });
+}
+
+function populateFieldsFromOcr(rawText) {
+    const cleanText = rawText.replace(/\s+/g, ' ');
+
+    // 1. 계좌 식별 (지정해주신 매핑 기준: 80-0, 40-0, -14, -01, -15, -05)
+    let detectedAccountId = '';
+    for (const rule of ACCOUNT_OCR_MAP) {
+        if (cleanText.includes(rule.pattern)) {
+            detectedAccountId = rule.accountId;
+            break;
+        }
+    }
+
+    // 2. 일자 추출 (삼성증권: '2026년 10월 15일' 등)
+    let detectedDate = new Date().toISOString().split('T')[0];
+    const dateMatch = cleanText.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
+    if (dateMatch) {
+        const y = dateMatch[1];
+        const m = String(dateMatch[2]).padStart(2, '0');
+        const d = String(dateMatch[3]).padStart(2, '0');
+        detectedDate = `${y}-${m}-${d}`;
+    }
+
+    // 3. 종목(티커) 파싱 (미래에셋: 'A495050', 'A441640', 'A0008S0' 등)
+    let detectedTicker = '';
+    const tickerMatch = cleanText.match(/A([0-9A-Z]{6})/i);
+    if (tickerMatch) {
+        detectedTicker = tickerMatch[1].toUpperCase();
+    } else {
+        // 삼성증권 종목명 텍스트 매칭
+        const stockSelect = document.getElementById('txStock');
+        if (stockSelect) {
+            for (let i = 0; i < stockSelect.options.length; i++) {
+                const optText = stockSelect.options[i].text.replace(/\s+/g, '');
+                if (cleanText.includes('미국배당커버드콜') && optText.includes('미국배당커버드콜')) {
+                    detectedTicker = stockSelect.options[i].value;
+                    break;
+                } else if (cleanText.includes('200타겟위클리') && optText.includes('200타겟위클리')) {
+                    detectedTicker = stockSelect.options[i].value;
+                    break;
+                }
+            }
+        }
+    }
+
+    // 4. 정산금액 파싱 (세전 분배금액 / 배정금액)
+    let settleAmount = 0;
+    const amountMatch = cleanText.match(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([\d,]+)\s*원/);
+    if (amountMatch) {
+        settleAmount = Number(amountMatch[1].replace(/,/g, '')) || 0;
+    }
+
+    // 5. 세금 파싱 (단일 세금 또는 소득세 + 지방소득세)
+    let totalTax = 0;
+    const taxSingleMatch = cleanText.match(/세금\s*[:：]?\s*([\d,]+)\s*원/);
+    if (taxSingleMatch) {
+        totalTax = Number(taxSingleMatch[1].replace(/,/g, '')) || 0;
+    } else {
+        const incomeTaxMatch = cleanText.match(/소득세\s*[:：]?\s*([\d,]+)\s*원/);
+        const localTaxMatch = cleanText.match(/지방소득세\s*[:：]?\s*([\d,]+)\s*원/);
+        const incTax = incomeTaxMatch ? (Number(incomeTaxMatch[1].replace(/,/g, '')) || 0) : 0;
+        const locTax = localTaxMatch ? (Number(localTaxMatch[1].replace(/,/g, '')) || 0) : 0;
+        totalTax = incTax + locTax;
+    }
+
+    // 모달창 필드에 자동 채우기
+    const inputDate = document.getElementById('txDate');
+    const selectAcc = document.getElementById('txAccount');
+    const selectType = document.getElementById('txType');
+    const selectStock = document.getElementById('txStock');
+    const inputAmount = document.getElementById('txAmount');
+    const inputTax = document.getElementById('txTax');
+    const inputMemo = document.getElementById('txMemo');
+    const modalTitle = document.getElementById('txModalTitle');
+
+    if (inputDate) inputDate.value = detectedDate;
+    if (selectAcc && detectedAccountId) selectAcc.value = detectedAccountId;
+    if (selectType) selectType.value = '분배금';
+    if (selectStock && detectedTicker) selectStock.value = detectedTicker;
+    if (inputAmount) inputAmount.value = settleAmount || '';
+    if (inputTax) inputTax.value = totalTax;
+    if (inputMemo) inputMemo.value = '이미지 OCR 자동 인식 분배금';
+
+    if (modalTitle) {
+        modalTitle.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-emerald-600 mr-1.5"></i> 이미지 인식 완료 (확인 후 저장)';
+    }
+
+    toggleQtyAndPriceFields();
+}
+
 function setupSyncPriceButton() {
     const btn = document.getElementById('btnSyncPrices');
     const icon = document.getElementById('syncIcon');
@@ -457,5 +618,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTabButtons();
     setupSyncPriceButton();
     setupTxModal();
+    setupOcrEngine();
     fetchD1Portfolio();
 });

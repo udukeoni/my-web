@@ -489,7 +489,7 @@ function setupOcrEngine() {
     });
 }
 
-// 💡 알림톡/앱 캡처 텍스트 정밀 매칭 및 입력 폼 자동 채우기 (13자리 부분 검색 엔진)
+// 💡 알림톡/앱 캡처 텍스트 정밀 매칭 및 입력 폼 자동 채우기 (DB 종목코드 직통 매칭 엔진)
 function populateFieldsFromOcr(rawText) {
     const cleanText = rawText.replace(/\s+/g, ' ');
     const noSpaceText = rawText.replace(/[\s\r\n\t]/g, '');
@@ -510,7 +510,7 @@ function populateFieldsFromOcr(rawText) {
         detectedAccountId = 'MIRAE_01';        // 미래에셋 일반
     }
 
-    // 2. 일자 추출
+    // 2. 일자 추출 (삼성/미래 알림톡 공통 날짜 추출)
     let detectedDate = new Date().toISOString().split('T')[0];
     const dateMatch = cleanText.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
     if (dateMatch) {
@@ -520,65 +520,74 @@ function populateFieldsFromOcr(rawText) {
         detectedDate = `${y}-${m}-${d}`;
     }
 
-    // 3. 💡 [사용자 제안 반영] 13자리 부분 검색 종목(티커) 매칭 엔진
+    // 3. 💡 [사용자 지시 완벽 반영] 미래에셋 'A' 제거 후 DB 티커 직통 매칭 & 삼성 13자리 검색
     let detectedTicker = '';
     let detectedName = '';
-
-    // 3-1) 미래에셋 코드(A441640 등)가 있으면 우선 매핑
-    const tickerMatch = cleanText.match(/A([0-9A-Z]{6})/i);
-    if (tickerMatch) {
-        detectedTicker = tickerMatch[1].toUpperCase();
-    }
-
-    // 3-2) 코드가 없거나 삼성증권 종목명인 경우: 13자리 부분 문자열 비교
     const stockSelect = document.getElementById('txStock');
+
+    // 3-1) 미래에셋 'A'로 시작하는 6자리 종목코드 추출 (A441640 -> 441640, A495050 -> 495050, A0008S0 -> 0008S0)
+    const codeMatch = cleanText.match(/A([0-9A-Z]{6})\b/i) || noSpaceText.match(/A([0-9A-Z]{6})/i);
+    let strippedTicker = codeMatch ? codeMatch[1].toUpperCase() : '';
+
     if (stockSelect) {
-        // 알림톡 텍스트에서 '종목명:' 뒤쪽 텍스트를 추출하거나 노이즈 제거 전체 텍스트 활용
-        let rawTargetName = '';
-        const nameBlockMatch = cleanText.match(/(?:종목명|ETF분배금)\s*[:：]?\s*([^\n\r]+)/);
-        if (nameBlockMatch) {
-            rawTargetName = nameBlockMatch[1].replace(/[\s\r\n\t\-_:：]/g, '');
-        } else {
-            rawTargetName = noSpaceText;
+        if (strippedTicker) {
+            // DB에 등록된 셀렉트박스 옵션의 value와 1:1 직통 대조!
+            for (let i = 0; i < stockSelect.options.length; i++) {
+                if (stockSelect.options[i].value.toUpperCase() === strippedTicker) {
+                    detectedTicker = stockSelect.options[i].value;
+                    detectedName = stockSelect.options[i].text.split('(')[0].trim();
+                    break;
+                }
+            }
         }
 
-        // 13자리 비교 키워드 슬라이스 (최소 6자리 이상 보장)
-        const searchSlice13 = rawTargetName.substring(0, 13);
-        const searchSlice8 = rawTargetName.substring(0, 8);
+        // 3-2) 코드가 없는 삼성증권의 경우: 13자리/8자리 부분 유사도 검색
+        if (!detectedTicker) {
+            let rawTargetName = '';
+            const nameBlockMatch = cleanText.match(/(?:종목명|ETF분배금)\s*[:：]?\s*([^\n\r]+)/);
+            if (nameBlockMatch) {
+                rawTargetName = nameBlockMatch[1].replace(/[\s\r\n\t\-_:：]/g, '');
+            } else {
+                rawTargetName = noSpaceText;
+            }
 
-        for (let i = 0; i < stockSelect.options.length; i++) {
-            const optVal = stockSelect.options[i].value;
-            const optRawText = stockSelect.options[i].text;
-            const optCleanName = optRawText.split('(')[0].replace(/[\s\r\n\t\-_:：]/g, '');
+            const searchSlice13 = rawTargetName.substring(0, 13);
+            const searchSlice8 = rawTargetName.substring(0, 8);
 
-            if (optVal === 'CASH' || optVal === 'INTEREST') continue; // 원화현금/이자는 비교 배제
+            for (let i = 0; i < stockSelect.options.length; i++) {
+                const optVal = stockSelect.options[i].value;
+                const optRawText = stockSelect.options[i].text;
+                const optCleanName = optRawText.split('(')[0].replace(/[\s\r\n\t\-_:：]/g, '');
 
-            // 13자리 부분 일치 or 8자리 부분 일치 or 상호 포함 여부 검사
-            const isMatch = (
-                (searchSlice13.length >= 6 && optCleanName.includes(searchSlice13)) ||
-                (optCleanName.length >= 6 && searchSlice13.includes(optCleanName.substring(0, 13))) ||
-                (searchSlice8.length >= 6 && optCleanName.includes(searchSlice8)) ||
-                noSpaceText.includes(optCleanName.substring(0, 8))
-            );
+                if (optVal === 'CASH' || optVal === 'INTEREST') continue;
 
-            if (isMatch) {
-                detectedTicker = optVal;
-                detectedName = optRawText.split('(')[0].trim();
-                break;
+                const isMatch = (
+                    (searchSlice13.length >= 6 && optCleanName.includes(searchSlice13)) ||
+                    (optCleanName.length >= 6 && searchSlice13.includes(optCleanName.substring(0, 13))) ||
+                    (searchSlice8.length >= 6 && optCleanName.includes(searchSlice8)) ||
+                    noSpaceText.includes(optCleanName.substring(0, 8))
+                );
+
+                if (isMatch) {
+                    detectedTicker = optVal;
+                    detectedName = optRawText.split('(')[0].trim();
+                    break;
+                }
             }
         }
     }
 
-    // 4. 금액 및 세금 파싱 (순수 숫자 정제)
-    const extractAmount = (pattern) => {
-        const match = cleanText.match(pattern);
+    // 4. 금액 및 세금 파싱 헬퍼 (숫자 앞뒤 노이즈 완벽 분리 및 11,092 앞자리 탈락 방어)
+    const extractAmount = (regex) => {
+        const match = cleanText.match(regex);
         if (!match) return 0;
         const numStr = match[1].replace(/[^0-9]/g, '');
         return Number(numStr) || 0;
     };
 
+    // 4-1) 세금 파싱
     let totalTax = 0;
-    const singleTax = extractAmount(/세\s*금\s*[:：]?\s*([0-9,]+)\s*원/);
+    const singleTax = extractAmount(/(?:^|\s)세\s*금\s*[:：]?\s*([0-9,]+)\s*원/);
     if (singleTax > 0) {
         totalTax = singleTax;
     } else {
@@ -587,14 +596,13 @@ function populateFieldsFromOcr(rawText) {
         totalTax = incTax + locTax;
     }
 
-    // 세전 분배금액(배정금액) 추출
-    let grossAmount = extractAmount(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([0-9,]+)\s*원/);
+    // 4-2) 세전 분배금액(배정금액) 추출 (콜론 뒤 공백 무관하게 첫 번째 숫자부터 쉼표 포함 전체 캡처)
+    let grossAmount = extractAmount(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([0-9][0-9,]*)\s*원/);
 
-    // 5. 모달창 입력 필드 주입
+    // 5. 모달창 입력 필드에 안전 주입
     const inputDate = document.getElementById('txDate');
     const selectAcc = document.getElementById('txAccount');
     const selectType = document.getElementById('txType');
-    const selectStock = document.getElementById('txStock');
     const inputAmount = document.getElementById('txAmount');
     const inputTax = document.getElementById('txTax');
     const inputMemo = document.getElementById('txMemo');
@@ -604,11 +612,12 @@ function populateFieldsFromOcr(rawText) {
     if (selectAcc && detectedAccountId) selectAcc.value = detectedAccountId;
     if (selectType) selectType.value = '분배금';
     
-    // 💡 종목이 매칭되었을 때만 선택 (원화 현금으로 튕김 원천 차단)
-    if (selectStock && detectedTicker) {
-        selectStock.value = detectedTicker;
+    // 💡 DB에서 찾은 정확한 종목코드로 즉시 선택
+    if (stockSelect && detectedTicker) {
+        stockSelect.value = detectedTicker;
     }
     
+    // 세전 금액 온전 주입 (11092원 정상 주입)
     if (inputAmount) inputAmount.value = grossAmount || '';
     if (inputTax) inputTax.value = totalTax;
 

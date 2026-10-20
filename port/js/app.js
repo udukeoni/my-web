@@ -1,5 +1,5 @@
 // port/js/app.js
-// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 자동 채우기 연동
+// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 및 세후 정산금/세금 연동
 
 let currentAccount = 'ALL';
 let currentView = 'OVERVIEW'; // 기본값을 '자산 현황(OVERVIEW)'으로 설정
@@ -336,13 +336,17 @@ function setupTxModal() {
                 if (inputQty) inputQty.value = item.quantity || '';
                 if (inputPrice) inputPrice.value = item.unit_price || '';
                 if (inputAmount) inputAmount.value = item.settle_amount || '';
-                if (inputTax) inputTax.value = (item.tax !== undefined ? item.tax : item.fee) || 0;
+
+                // 💡 [버그 수정 2] DB의 fee 컬럼 값을 정확히 읽어와 세금 필드에 바인딩
+                const loadedTax = (item.fee !== undefined && item.fee !== null) ? item.fee : (item.tax || 0);
+                if (inputTax) inputTax.value = Number(loadedTax);
+
                 if (inputMemo) inputMemo.value = item.memo || '';
 
                 if (modalTitle) modalTitle.textContent = '거래내역 수정 / 삭제';
                 if (submitBtn) submitBtn.textContent = '수정 완료';
                 if (btnDelete) btnDelete.classList.remove('hidden');
-                if (btnModalOcr) btnModalOcr.classList.add('hidden'); // 수정 모드일 때는 업로드 버튼 숨김
+                if (btnModalOcr) btnModalOcr.classList.add('hidden');
 
                 toggleQtyAndPriceFields();
                 if (modal) modal.classList.remove('hidden');
@@ -461,7 +465,6 @@ function setupOcrEngine() {
                 throw new Error('OCR 엔진 라이브러리를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');
             }
 
-            // 한국어 + 영어 동시 판독
             const { data: { text } } = await Tesseract.recognize(
                 file,
                 'kor+eng',
@@ -476,7 +479,6 @@ function setupOcrEngine() {
                 }
             );
 
-            // 읽어낸 텍스트를 분석하여 모달 필드에 주입
             populateFieldsFromOcr(text);
 
         } catch (err) {
@@ -484,7 +486,7 @@ function setupOcrEngine() {
             alert('이미지 인식 중 오류가 발생했습니다: ' + err.message);
         } finally {
             if (overlay) overlay.classList.add('hidden');
-            fileInput.value = ''; // 재선택 가능하도록 초기화
+            fileInput.value = '';
         }
     });
 }
@@ -492,7 +494,7 @@ function setupOcrEngine() {
 function populateFieldsFromOcr(rawText) {
     const cleanText = rawText.replace(/\s+/g, ' ');
 
-    // 1. 계좌 식별 (지정해주신 매핑 기준: 80-0, 40-0, -14, -01, -15, -05)
+    // 1. 계좌 식별 (80-0, 40-0, -14, -01, -15, -05)
     let detectedAccountId = '';
     for (const rule of ACCOUNT_OCR_MAP) {
         if (cleanText.includes(rule.pattern)) {
@@ -511,13 +513,12 @@ function populateFieldsFromOcr(rawText) {
         detectedDate = `${y}-${m}-${d}`;
     }
 
-    // 3. 종목(티커) 파싱 (미래에셋: 'A495050', 'A441640', 'A0008S0' 등)
+    // 3. 종목(티커) 파싱 (미래에셋: 'A495050' / 삼성증권 종목명 매칭)
     let detectedTicker = '';
     const tickerMatch = cleanText.match(/A([0-9A-Z]{6})/i);
     if (tickerMatch) {
         detectedTicker = tickerMatch[1].toUpperCase();
     } else {
-        // 삼성증권 종목명 텍스트 매칭
         const stockSelect = document.getElementById('txStock');
         if (stockSelect) {
             for (let i = 0; i < stockSelect.options.length; i++) {
@@ -533,14 +534,7 @@ function populateFieldsFromOcr(rawText) {
         }
     }
 
-    // 4. 정산금액 파싱 (세전 분배금액 / 배정금액)
-    let settleAmount = 0;
-    const amountMatch = cleanText.match(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([\d,]+)\s*원/);
-    if (amountMatch) {
-        settleAmount = Number(amountMatch[1].replace(/,/g, '')) || 0;
-    }
-
-    // 5. 세금 파싱 (단일 세금 또는 소득세 + 지방소득세)
+    // 4. 세금 파싱 (단일 세금 또는 소득세 + 지방소득세)
     let totalTax = 0;
     const taxSingleMatch = cleanText.match(/세금\s*[:：]?\s*([\d,]+)\s*원/);
     if (taxSingleMatch) {
@@ -551,6 +545,21 @@ function populateFieldsFromOcr(rawText) {
         const incTax = incomeTaxMatch ? (Number(incomeTaxMatch[1].replace(/,/g, '')) || 0) : 0;
         const locTax = localTaxMatch ? (Number(localTaxMatch[1].replace(/,/g, '')) || 0) : 0;
         totalTax = incTax + locTax;
+    }
+
+    // 5. 💡 [요청사항 1 반영] 금액 파싱 및 세후 정산금액 자동 산출
+    // 알림톡에 세후 분배금액이 명시된 경우 우선 추출
+    let netSettleAmount = 0;
+    const netMatch = cleanText.match(/세후\s*분배금액\s*[:：]?\s*([\d,]+)\s*원/);
+    if (netMatch) {
+        netSettleAmount = Number(netMatch[1].replace(/,/g, '')) || 0;
+    } else {
+        // 세전 금액 추출 후 세금을 뺀 실입금액(정산금액) 계산
+        const grossMatch = cleanText.match(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([\d,]+)\s*원/);
+        if (grossMatch) {
+            const gross = Number(grossMatch[1].replace(/,/g, '')) || 0;
+            netSettleAmount = (totalTax > 0) ? (gross - totalTax) : gross;
+        }
     }
 
     // 모달창 필드에 자동 채우기
@@ -567,7 +576,9 @@ function populateFieldsFromOcr(rawText) {
     if (selectAcc && detectedAccountId) selectAcc.value = detectedAccountId;
     if (selectType) selectType.value = '분배금';
     if (selectStock && detectedTicker) selectStock.value = detectedTicker;
-    if (inputAmount) inputAmount.value = settleAmount || '';
+    
+    // 정산금액(세후 입금액) 및 세금 주입
+    if (inputAmount) inputAmount.value = netSettleAmount || '';
     if (inputTax) inputTax.value = totalTax;
     if (inputMemo) inputMemo.value = '이미지 OCR 자동 인식 분배금';
 

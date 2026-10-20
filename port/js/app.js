@@ -489,16 +489,13 @@ function setupOcrEngine() {
     });
 }
 
-// 💡 알림톡/앱 캡처 텍스트 정밀 매칭 및 입력 폼 자동 채우기 (오인식 완전 차단 강화형)
+// 💡 알림톡/앱 캡처 텍스트 정밀 매칭 및 입력 폼 자동 채우기 (13자리 부분 검색 엔진)
 function populateFieldsFromOcr(rawText) {
     const cleanText = rawText.replace(/\s+/g, ' ');
-    // 띄어쓰기 및 특수기호 제거 문자열
     const noSpaceText = rawText.replace(/[\s\r\n\t]/g, '');
 
-    // 1. 계좌 식별 (엄격한 끝자리 정규식 매칭)
+    // 1. 계좌 식별 (끝자리 엄격 매칭)
     let detectedAccountId = '';
-    
-    // 삼성증권: 계좌번호 뒷자리 (-01, -14, -15, -05) 정밀 검사
     if (/[-*]01\b|[-*]01\D/.test(cleanText) || noSpaceText.includes('-01') || noSpaceText.includes('*****01')) {
         detectedAccountId = 'SAMSUNG_GEN';     // 삼성-일반
     } else if (/[-*]14\b|[-*]14\D/.test(cleanText) || noSpaceText.includes('-14') || noSpaceText.includes('*****14')) {
@@ -507,15 +504,13 @@ function populateFieldsFromOcr(rawText) {
         detectedAccountId = 'SAMSUNG_PENSION'; // 삼성-연금
     } else if (/[-*]05\b|[-*]05\D/.test(cleanText) || noSpaceText.includes('-05') || noSpaceText.includes('*****05')) {
         detectedAccountId = 'SAMSUNG_CMA';     // 삼성-CMA
-    } 
-    // 미래에셋: 계좌번호 끝자리 (80-0, 40-0) 정밀 검사
-    else if (/80-0/.test(cleanText) || noSpaceText.includes('80-0') || noSpaceText.includes('**80-0')) {
+    } else if (/80-0/.test(cleanText) || noSpaceText.includes('80-0')) {
         detectedAccountId = 'MIRAE_PENSION';   // 미래-연금
-    } else if (/40-0/.test(cleanText) || noSpaceText.includes('40-0') || noSpaceText.includes('**40-0')) {
+    } else if (/40-0/.test(cleanText) || noSpaceText.includes('40-0')) {
         detectedAccountId = 'MIRAE_01';        // 미래에셋 일반
     }
 
-    // 2. 일자 추출 (삼성증권: '기준일 : 2026년 10월 15일' 등)
+    // 2. 일자 추출
     let detectedDate = new Date().toISOString().split('T')[0];
     const dateMatch = cleanText.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
     if (dateMatch) {
@@ -525,63 +520,63 @@ function populateFieldsFromOcr(rawText) {
         detectedDate = `${y}-${m}-${d}`;
     }
 
-    // 3. 종목(티커) 정밀 매칭
+    // 3. 💡 [사용자 제안 반영] 13자리 부분 검색 종목(티커) 매칭 엔진
     let detectedTicker = '';
     let detectedName = '';
 
-    // 3-1) 미래에셋 영문+숫자 6자리 코드 우선 탐색 (예: A495050, A441640, A0008S0)
+    // 3-1) 미래에셋 코드(A441640 등)가 있으면 우선 매핑
     const tickerMatch = cleanText.match(/A([0-9A-Z]{6})/i);
     if (tickerMatch) {
         detectedTicker = tickerMatch[1].toUpperCase();
-    } else {
-        // 3-2) 삼성증권 종목명 정밀 다중 키워드 매칭
-        const stockSelect = document.getElementById('txStock');
-        if (stockSelect) {
-            const targetKeywords = [
-                { pattern: /200.*위클리/i, name: 'KODEX 200타겟위클리커버드콜' },
-                { pattern: /미국배당.*커버드콜/i, name: 'KODEX 미국배당커버드콜' },
-                { pattern: /미국배당.*다우존스/i, name: 'TIGER 미국배당다우존스타겟' },
-                { pattern: /미국나스닥.*100/i, name: 'TIGER 미국나스닥100' },
-                { pattern: /미국AI.*밸류체인/i, name: 'RISE 미국AI밸류체인' },
-                { pattern: /국제금.*커버드콜/i, name: 'SOL 국제금커버드콜' },
-                { pattern: /30년.*국채/i, name: 'SOL 미국30년국채' },
-                { pattern: /코리아.*밸류업/i, name: 'RISE 코리아밸류업' },
-                { pattern: /미국.*S&P.*500/i, name: 'KODEX 미국S&P500' }
-            ];
+    }
 
-            let matchedKeywordName = '';
-            for (const item of targetKeywords) {
-                if (item.pattern.test(noSpaceText) || item.pattern.test(cleanText)) {
-                    matchedKeywordName = item.name;
-                    break;
-                }
-            }
+    // 3-2) 코드가 없거나 삼성증권 종목명인 경우: 13자리 부분 문자열 비교
+    const stockSelect = document.getElementById('txStock');
+    if (stockSelect) {
+        // 알림톡 텍스트에서 '종목명:' 뒤쪽 텍스트를 추출하거나 노이즈 제거 전체 텍스트 활용
+        let rawTargetName = '';
+        const nameBlockMatch = cleanText.match(/(?:종목명|ETF분배금)\s*[:：]?\s*([^\n\r]+)/);
+        if (nameBlockMatch) {
+            rawTargetName = nameBlockMatch[1].replace(/[\s\r\n\t\-_:：]/g, '');
+        } else {
+            rawTargetName = noSpaceText;
+        }
 
-            for (let i = 0; i < stockSelect.options.length; i++) {
-                const optVal = stockSelect.options[i].value;
-                const optText = stockSelect.options[i].text.replace(/[\s\r\n\t\-_:：]/g, '');
+        // 13자리 비교 키워드 슬라이스 (최소 6자리 이상 보장)
+        const searchSlice13 = rawTargetName.substring(0, 13);
+        const searchSlice8 = rawTargetName.substring(0, 8);
 
-                if (optVal === 'CASH' || optVal === 'INTEREST') continue;
+        for (let i = 0; i < stockSelect.options.length; i++) {
+            const optVal = stockSelect.options[i].value;
+            const optRawText = stockSelect.options[i].text;
+            const optCleanName = optRawText.split('(')[0].replace(/[\s\r\n\t\-_:：]/g, '');
 
-                if (matchedKeywordName && optText.includes(matchedKeywordName.replace(/[\s\r\n\t\-_:：]/g, ''))) {
-                    detectedTicker = optVal;
-                    detectedName = stockSelect.options[i].text.split('(')[0].trim();
-                    break;
-                }
+            if (optVal === 'CASH' || optVal === 'INTEREST') continue; // 원화현금/이자는 비교 배제
+
+            // 13자리 부분 일치 or 8자리 부분 일치 or 상호 포함 여부 검사
+            const isMatch = (
+                (searchSlice13.length >= 6 && optCleanName.includes(searchSlice13)) ||
+                (optCleanName.length >= 6 && searchSlice13.includes(optCleanName.substring(0, 13))) ||
+                (searchSlice8.length >= 6 && optCleanName.includes(searchSlice8)) ||
+                noSpaceText.includes(optCleanName.substring(0, 8))
+            );
+
+            if (isMatch) {
+                detectedTicker = optVal;
+                detectedName = optRawText.split('(')[0].trim();
+                break;
             }
         }
     }
 
-    // 4. 금액 파싱 헬퍼 (숫자 앞뒤 노이즈 제거 및 온전한 원화 금액 추출)
+    // 4. 금액 및 세금 파싱 (순수 숫자 정제)
     const extractAmount = (pattern) => {
         const match = cleanText.match(pattern);
         if (!match) return 0;
-        // 콤마 제거 후 숫자만 온전하게 파싱
         const numStr = match[1].replace(/[^0-9]/g, '');
         return Number(numStr) || 0;
     };
 
-    // 4-1) 세금 파싱 (단일 세금 또는 소득세 + 지방소득세)
     let totalTax = 0;
     const singleTax = extractAmount(/세\s*금\s*[:：]?\s*([0-9,]+)\s*원/);
     if (singleTax > 0) {
@@ -592,19 +587,10 @@ function populateFieldsFromOcr(rawText) {
         totalTax = incTax + locTax;
     }
 
-    // 4-2) 세전 및 세후 금액 파싱
+    // 세전 분배금액(배정금액) 추출
     let grossAmount = extractAmount(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([0-9,]+)\s*원/);
-    let netAmount = extractAmount(/세후\s*(?:분배)?금액\s*[:：]?\s*([0-9,]+)\s*원/);
 
-    // 실제 정산금액(내 통장에 입금되는 세후 실수령액) 결정
-    let finalSettleAmount = 0;
-    if (netAmount > 0) {
-        finalSettleAmount = netAmount;
-    } else if (grossAmount > 0) {
-        finalSettleAmount = (totalTax > 0) ? (grossAmount - totalTax) : grossAmount;
-    }
-
-    // 5. 모달창 입력 필드에 값 주입
+    // 5. 모달창 입력 필드 주입
     const inputDate = document.getElementById('txDate');
     const selectAcc = document.getElementById('txAccount');
     const selectType = document.getElementById('txType');
@@ -618,11 +604,12 @@ function populateFieldsFromOcr(rawText) {
     if (selectAcc && detectedAccountId) selectAcc.value = detectedAccountId;
     if (selectType) selectType.value = '분배금';
     
+    // 💡 종목이 매칭되었을 때만 선택 (원화 현금으로 튕김 원천 차단)
     if (selectStock && detectedTicker) {
         selectStock.value = detectedTicker;
     }
     
-    if (inputAmount) inputAmount.value = finalSettleAmount || '';
+    if (inputAmount) inputAmount.value = grossAmount || '';
     if (inputTax) inputTax.value = totalTax;
 
     const monthStr = detectedDate.split('-')[1] || '';

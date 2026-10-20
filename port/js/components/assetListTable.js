@@ -1,7 +1,7 @@
 // port/js/components/assetListTable.js
 // 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10건 자동 페이징 + 계좌별 정확한 뷰 분기)
 
-const BASE_FIXED_TRADE_ID = 433; // 433번까지 고정 데이터 보호
+const BASE_FIXED_TRADE_ID = 0; // 초기화
 
 let currentPage = 1;
 let pageSize = 10; // 종목 10개 단위로 자동 커트

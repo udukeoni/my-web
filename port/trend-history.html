@@ -31,7 +31,7 @@
 
   <main class="max-w-6xl mx-auto p-4 sm:p-6 space-y-4">
 
-    <!-- 데이터 요약 바 (설명글 제거 & 기간 제목 + 건수 뱃지 일체형) -->
+    <!-- 데이터 요약 바 (기간 제목 + 건수 뱃지 일체형) -->
     <div class="bg-white px-4 py-3 sm:px-5 sm:py-3.5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
       <h2 id="viewTitle" class="font-bold text-slate-800 text-sm sm:text-base">기록 상세</h2>
       <span id="recordCount" class="bg-blue-50 text-blue-600 font-bold text-xs px-2.5 py-1 rounded-full">0건</span>
@@ -44,7 +44,7 @@
         <table class="w-full text-left text-sm">
           <thead class="bg-slate-50 text-slate-500 text-xs font-semibold border-b border-slate-200">
             <tr>
-              <th id="thTime" class="py-3.5 px-4">기록 일시</th>
+              <th id="thTime" class="py-3.5 px-4">기록 일자</th>
               <th class="py-3.5 px-4">계좌</th>
               <th class="py-3.5 px-4 text-right">총 매입원가</th>
               <th class="py-3.5 px-4 text-right">평가금 (순자산)</th>
@@ -70,22 +70,17 @@
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
-    const period = urlParams.get('period') || 'ALL';
+    const period = urlParams.get('period') || '1W';
     const account = urlParams.get('account') || 'ALL';
 
     const periodNames = {
-      'INTRADAY': '당일 실시간 기록 (30분 주기)',
+      '1W': '최근 1주일 기록',
       '1M': '최근 1개월 기록',
       '3M': '최근 3개월 기록',
       'ALL': '전체 누적 기록'
     };
 
     document.getElementById('viewTitle').textContent = periodNames[period] || period;
-    if (period === 'INTRADAY') {
-      document.getElementById('thTime').textContent = '기록 시각';
-    } else {
-      document.getElementById('thTime').textContent = '기록 일자';
-    }
 
     async function loadTrendHistory() {
       const tbody = document.getElementById('tableBody');

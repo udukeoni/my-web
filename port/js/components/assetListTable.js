@@ -1,10 +1,10 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10건 자동 페이지네이션 지원)
 
 const BASE_FIXED_TRADE_ID = 433; // 433번까지 고정 데이터 보호
 
 let currentPage = 1;
-let pageSize = 50; // 한 화면에 전체 종목을 스프레드시트처럼 볼 수 있도록 50건 표시
+let pageSize = 10; // 요청사항 반영: 종목 10개 단위로 자동 커트하여 페이지 분할
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
@@ -20,8 +20,9 @@ function renderDataTable(viewType, dataList) {
     if (currentViewType !== viewType) {
         currentPage = 1;
         currentViewType = viewType;
-        pageSize = (viewType === 'HOLDINGS') ? 50 : 15;
     }
+    // 종목 잔고 및 원장 공통 10건 단위 페이징 통일
+    pageSize = 10;
     currentDataList = dataList || [];
 
     // 거래내역 입력 버튼 제어
@@ -51,7 +52,7 @@ function renderDataTable(viewType, dataList) {
         }
 
         if (hasRebalance) {
-            // 💡 [구글 스프레드시트 완전 동일] 밴드리밸런싱 전용 와이드 헤더
+            // [구글 스프레드시트 완전 동일] 밴드리밸런싱 전용 와이드 헤더
             thead.innerHTML = `
                 <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
                   <th class="py-2 px-3 text-left">종목명</th>
@@ -147,7 +148,7 @@ function renderPaginatedRows() {
         const hasRebalance = currentDataList.some(item => item.target_weight !== null && item.target_weight !== undefined);
 
         if (hasRebalance) {
-            // 💡 [밴드리밸런싱 본문 렌더링]
+            // [밴드리밸런싱 본문 렌더링]
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -174,62 +175,20 @@ function renderPaginatedRows() {
 
                 return `
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
-                      <!-- 1. 종목명 -->
-                      <td class="py-2 px-3 font-semibold text-slate-900">
-                        ${item.asset_name}
-                      </td>
-                      <!-- 2. 코드 -->
-                      <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">
-                        ${item.ticker}
-                      </td>
-                      <!-- 3. 수량 -->
-                      <td class="py-2 px-2 text-right font-mono text-slate-700">
-                        ${item.isCash ? '1' : Number(item.quantity).toLocaleString()}
-                      </td>
-                      <!-- 4. 매수평균가 -->
-                      <td class="py-2 px-2.5 text-right font-mono text-slate-600">
-                        ₩${Number(item.avg_buy_price).toLocaleString()}
-                      </td>
-                      <!-- 5. 현재가 -->
-                      <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">
-                        ₩${Number(item.current_price).toLocaleString()}
-                      </td>
-                      <!-- 6. 평가금액 -->
-                      <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/70">
-                        ₩${Number(item.eval_amount).toLocaleString()}
-                      </td>
-                      <!-- 7. 손익률 -->
-                      <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">
-                        ${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}
-                      </td>
-                      <!-- 8. 현재비중 (강조) -->
-                      <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/40 border-l border-blue-50">
-                        ${item.weight}%
-                      </td>
-                      <!-- 9. 목표비중 -->
-                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">
-                        ${item.target_weight !== null ? item.target_weight + '%' : '-'}
-                      </td>
-                      <!-- 10. 밴드하한 -->
-                      <td class="py-2 px-2 text-right font-mono text-slate-500">
-                        ${item.band_min !== null ? item.band_min.toFixed(2) + '%' : '-'}
-                      </td>
-                      <!-- 11. 밴드상한 -->
-                      <td class="py-2 px-2 text-right font-mono text-slate-500">
-                        ${item.band_max !== null ? item.band_max.toFixed(2) + '%' : '-'}
-                      </td>
-                      <!-- 12. 상태 확인 -->
-                      <td class="py-2 px-2.5 text-center bg-slate-50/60">
-                        ${statusBadge}
-                      </td>
-                      <!-- 13. 매수/매도액 -->
-                      <td class="py-2 px-3 text-right font-mono ${diffColor} bg-amber-50/20 border-l border-amber-50">
-                        ${diffAmt !== 0 ? `${diffSign}₩${Math.abs(diffAmt).toLocaleString()}` : '₩0'}
-                      </td>
-                      <!-- 14. 조정 주식 수 -->
-                      <td class="py-2 px-2.5 text-right font-mono font-bold ${diffColor} bg-amber-50/20">
-                        ${adjText}
-                      </td>
+                      <td class="py-2 px-3 font-semibold text-slate-900">${item.asset_name}</td>
+                      <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">${item.ticker}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
+                      <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Number(item.avg_buy_price).toLocaleString()}</td>
+                      <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
+                      <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/70">₩${Number(item.eval_amount).toLocaleString()}</td>
+                      <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
+                      <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/40 border-l border-blue-50">${item.weight}%</td>
+                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${item.target_weight !== null ? item.target_weight + '%' : '-'}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_min !== null ? item.band_min.toFixed(2) + '%' : '-'}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_max !== null ? item.band_max.toFixed(2) + '%' : '-'}</td>
+                      <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
+                      <td class="py-2 px-3 text-right font-mono ${diffColor} bg-amber-50/20 border-l border-amber-50">${diffAmt !== 0 ? `${diffSign}₩${Math.abs(diffAmt).toLocaleString()}` : '₩0'}</td>
+                      <td class="py-2 px-2.5 text-right font-mono font-bold ${diffColor} bg-amber-50/20">${adjText}</td>
                     </tr>
                 `;
             }).join('');
@@ -406,14 +365,12 @@ function updatePaginationControls() {
 
     if (!select || !totalText || !btnPrev || !btnNext) return;
 
-    if (currentViewType === 'HOLDINGS' && totalPages === 1) {
-        if (paginationBar) {
-            const pageInfoText = paginationBar.querySelector('.flex.items-center.gap-1\\.5 span');
-            if (pageInfoText) pageInfoText.textContent = `전체 ${currentDataList.length}개 종목 한눈에 보기`;
+    // 💡 [요청사항 반영] 하단 '전체 N개 종목 한눈에 보기' 문구 제거 및 빈칸 처리
+    if (paginationBar) {
+        const pageInfoContainer = paginationBar.querySelector('.flex.items-center.gap-1\\.5');
+        if (pageInfoContainer) {
+            pageInfoContainer.innerHTML = ''; // 빈칸으로 깔끔하게 비움
         }
-    } else if (paginationBar) {
-        const pageInfoText = paginationBar.querySelector('.flex.items-center.gap-1\\.5 span');
-        if (pageInfoText) pageInfoText.textContent = `페이지당 ${pageSize}건`;
     }
 
     totalText.textContent = `/ ${totalPages} 페이지`;

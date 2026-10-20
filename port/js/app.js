@@ -596,8 +596,14 @@ function populateFieldsFromOcr(rawText) {
         totalTax = incTax + locTax;
     }
 
-    // 4-2) 세전 분배금액(배정금액) 추출 (콜론 뒤 공백 무관하게 첫 번째 숫자부터 쉼표 포함 전체 캡처)
-    let grossAmount = extractAmount(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([0-9][0-9,]*)\s*원/);
+    // 4-2) 세전 분배금액(배정금액) 추출 (콜론 노이즈 및 앞자리 1 탈락 완벽 방어)
+    let grossAmount = 0;
+    const grossPatternMatch = cleanText.match(/(?:배정금액|세전\s*분배금액)[^0-9]*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\s*원/);
+    if (grossPatternMatch) {
+        grossAmount = Number(grossPatternMatch[1].replace(/[^0-9]/g, '')) || 0;
+    } else {
+        grossAmount = extractAmount(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([0-9,]+)\s*원/);
+    }
 
     // 5. 모달창 입력 필드에 안전 주입
     const inputDate = document.getElementById('txDate');

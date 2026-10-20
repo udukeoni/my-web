@@ -1,5 +1,5 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (매수+, 매도- 부호 명확화 및 slate-500 색상 통일)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10건 자동 페이징 + 미래-연금 비중 헤더 클릭 시 확장/축소 토글)
 
 const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
@@ -7,6 +7,9 @@ let currentPage = 1;
 let pageSize = 10; // 종목 10개 단위로 자동 커트
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
+
+// 💡 미래-연금 밴드리밸런싱 확장 토글 상태 플래그 (기본값: false = 축소된 일반 뷰)
+let isRebalanceExpanded = false;
 
 function renderDataTable(viewType, dataList) {
     const thead = document.getElementById('tableHead');
@@ -17,9 +20,12 @@ function renderDataTable(viewType, dataList) {
 
     if (!thead || !tbody || !mobileList) return;
 
-    // 데이터나 탭이 변경될 때 무조건 1페이지로 안전 초기화
-    currentPage = 1;
-    currentViewType = viewType;
+    if (currentViewType !== viewType) {
+        currentPage = 1;
+        currentViewType = viewType;
+        // 다른 탭으로 이동 시 토글 상태 초기화
+        isRebalanceExpanded = false;
+    }
     pageSize = 10;
     currentDataList = dataList || [];
 
@@ -40,10 +46,15 @@ function renderDataTable(viewType, dataList) {
     // ==========================================
     if (viewType === 'HOLDINGS') {
         const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
-        const isRebalanceAccount = (selectedAcc === 'MIRAE_PENSION') || 
-                                   (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
+        const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
+                                 (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        if (title) title.textContent = isRebalanceAccount ? '자산배분 밴드리밸런싱 포트폴리오' : '보유 종목 상세';
+        // 미래-연금이고 확장 플래그가 켜졌을 때만 14개 열 와이드 헤더 표시
+        const showWideRebalance = isPensionAccount && isRebalanceExpanded;
+
+        if (title) {
+            title.textContent = showWideRebalance ? '자산배분 밴드리밸런싱 포트폴리오' : '보유 종목 상세';
+        }
         if (badge) badge.textContent = `${currentDataList.length}종목`;
 
         if (btnOpenModal) {
@@ -51,8 +62,8 @@ function renderDataTable(viewType, dataList) {
             btnOpenModal.classList.remove('inline-flex');
         }
 
-        if (isRebalanceAccount) {
-            // [구글 스프레드시트 동일] 미래-연금 전용 14개 열 와이드 헤더
+        if (showWideRebalance) {
+            // [펼쳐진 상태] 14개 열 와이드 헤더 (현재비중 클릭 시 축소 토글)
             thead.innerHTML = `
                 <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
                   <th class="py-2 px-3 text-left">종목명</th>
@@ -62,8 +73,11 @@ function renderDataTable(viewType, dataList) {
                   <th class="py-2 px-2.5 text-right">현재가</th>
                   <th class="py-2 px-3 text-right bg-slate-200/50">평가금액</th>
                   <th class="py-2 px-2.5 text-right">손익률</th>
-                  <th class="py-2 px-2.5 text-right bg-blue-50/70 text-blue-900 border-l border-blue-100">현재비중</th>
-                  <th class="py-2 px-2.5 text-right bg-emerald-50/70 text-emerald-900">목표비중</th>
+                  <!-- 💡 클릭 시 축소되는 인터랙티브 헤더 -->
+                  <th id="thToggleRebalance" title="클릭 시 기본 테이블로 축소" class="py-2 px-2.5 text-right bg-blue-100 hover:bg-blue-200 text-blue-900 border-l border-blue-200 cursor-pointer transition select-none">
+                    현재비중 <i class="fa-solid fa-compress text-[10px] ml-0.5 opacity-70"></i>
+                  </th>
+                  <th class="py-2 px-2 text-right bg-emerald-50/70 text-emerald-900">목표비중</th>
                   <th class="py-2 px-2 text-right text-slate-500">밴드하한</th>
                   <th class="py-2 px-2 text-right text-slate-500">밴드상한</th>
                   <th class="py-2 px-2.5 text-center bg-slate-200/60">상태 확인</th>
@@ -72,7 +86,14 @@ function renderDataTable(viewType, dataList) {
                 </tr>
             `;
         } else {
-            // 전체 계좌 종합 및 일반 계좌용 깔끔한 9개 열 헤더
+            // [기본 상태] 모든 계좌 공통 9개 열 콤팩트 헤더
+            // 미래-연금 계좌일 경우 비중에 클릭 토글 스타일 및 아이콘 적용
+            const weightHeaderHtml = isPensionAccount 
+                ? `<th id="thToggleRebalance" title="클릭 시 자산배분 밴드리밸런싱 분석 확장" class="py-2 px-2.5 text-right bg-blue-50/80 hover:bg-blue-100 text-blue-800 cursor-pointer transition select-none">
+                    비중 <i class="fa-solid fa-expand text-[10px] ml-0.5 opacity-70"></i>
+                   </th>`
+                : `<th class="py-2 px-2.5 text-right bg-blue-50/60 text-blue-800">비중</th>`;
+
             thead.innerHTML = `
                 <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
                   <th class="py-2 px-3 text-left">종목명</th>
@@ -81,11 +102,21 @@ function renderDataTable(viewType, dataList) {
                   <th class="py-2 px-2.5 text-right">현재가</th>
                   <th class="py-2 px-2 text-right">수량</th>
                   <th class="py-2 px-3 text-right bg-slate-200/50">평가금액</th>
-                  <th class="py-2 px-2.5 text-right bg-blue-50/60 text-blue-800">비중</th>
+                  ${weightHeaderHtml}
                   <th class="py-2 px-3 text-right">평가손익</th>
                   <th class="py-2 px-2.5 text-right">수익률</th>
                 </tr>
             `;
+        }
+
+        // 💡 비중 헤더 클릭 이벤트 바인딩 (확장/축소 토글)
+        const toggleBtn = thead.querySelector('#thToggleRebalance');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                isRebalanceExpanded = !isRebalanceExpanded;
+                renderDataTable('HOLDINGS', currentDataList);
+            });
         }
 
     // ==========================================
@@ -102,13 +133,8 @@ function renderDataTable(viewType, dataList) {
         if (badge) badge.textContent = `${currentDataList.length}건`;
 
         if (btnOpenModal) {
-            if (viewType === 'ALL_LOGS') {
-                btnOpenModal.classList.remove('hidden');
-                btnOpenModal.classList.add('inline-flex');
-            } else {
-                btnOpenModal.classList.add('hidden');
-                btnOpenModal.classList.remove('inline-flex');
-            }
+            btnOpenModal.classList.remove('hidden');
+            btnOpenModal.classList.add('inline-flex');
         }
 
         thead.innerHTML = `
@@ -136,8 +162,8 @@ function renderPaginatedRows() {
     if (!tbody || !mobileList) return;
 
     if (!currentDataList || currentDataList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="14" class="py-8 text-center text-slate-400 text-xs">보유 종목이 없습니다.</td></tr>`;
-        mobileList.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs">보유 종목이 없습니다.</div>`;
+        tbody.innerHTML = `<tr><td colspan="14" class="py-8 text-center text-slate-400 text-xs">데이터가 없습니다.</td></tr>`;
+        mobileList.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs">데이터가 없습니다.</div>`;
         return;
     }
 
@@ -149,11 +175,11 @@ function renderPaginatedRows() {
 
     if (currentViewType === 'HOLDINGS') {
         const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
-        const isRebalanceAccount = (selectedAcc === 'MIRAE_PENSION') || 
+        const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
                                    (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        if (isRebalanceAccount) {
-            // [미래-연금 전용 밴드리밸런싱 14개 열 본문]
+        // 미래-연금이고 확장 토글이 켜진 경우에만 14개 열 와이드 본문 렌더링
+        if (isPensionAccount && isRebalanceExpanded) {
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -168,25 +194,17 @@ function renderPaginatedRows() {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">🔴 매도</span>';
                 }
 
-                // 💡 [요청사항 반영] 매수(+), 매도(-) 부호 표기 & 밴드 상하한과 동일한 text-slate-500 폰트색 통일
                 const diffAmt = Number(item.diff_amount || 0);
                 let diffText = '₩0';
-                if (diffAmt > 0) {
-                    diffText = `+₩${diffAmt.toLocaleString()}`;
-                } else if (diffAmt < 0) {
-                    diffText = `-₩${Math.abs(diffAmt).toLocaleString()}`;
-                }
+                if (diffAmt > 0) diffText = `+₩${diffAmt.toLocaleString()}`;
+                else if (diffAmt < 0) diffText = `-₩${Math.abs(diffAmt).toLocaleString()}`;
 
                 const adjShares = Number(item.adjust_shares || 0);
                 let adjText = '-';
                 if (!item.isCash && item.current_price > 0) {
-                    if (adjShares > 0) {
-                        adjText = `+${adjShares.toLocaleString()}주`;
-                    } else if (adjShares < 0) {
-                        adjText = `-${Math.abs(adjShares).toLocaleString()}주`;
-                    } else {
-                        adjText = '0주';
-                    }
+                    if (adjShares > 0) adjText = `+${adjShares.toLocaleString()}주`;
+                    else if (adjShares < 0) adjText = `-${Math.abs(adjShares).toLocaleString()}주`;
+                    else adjText = '0주';
                 }
 
                 return `
@@ -203,7 +221,6 @@ function renderPaginatedRows() {
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_min !== null ? item.band_min.toFixed(2) + '%' : '-'}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_max !== null ? item.band_max.toFixed(2) + '%' : '-'}</td>
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
-                      <!-- 파란색/빨간색을 제거하고 밴드 상하한과 동일한 text-slate-500 통일 -->
                       <td class="py-2 px-3 text-right font-mono font-medium text-slate-500 border-l border-slate-100">${diffText}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-500">${adjText}</td>
                     </tr>
@@ -251,7 +268,7 @@ function renderPaginatedRows() {
             }).join('');
 
         } else {
-            // [전체 계좌 종합 및 일반 계좌 콤팩트 본문: 9개 열 정상 출력]
+            // [기본 상태] 9개 열 콤팩트 본문 렌더링
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -308,14 +325,13 @@ function renderPaginatedRows() {
             else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
 
             const isTransfer = (item.trade_type === '출금' || item.trade_type === '입금');
-            const taxText = isTransfer ? '₩0' : ((item.tax || item.fee) ? '₩' + Number(item.tax || item.fee).toLocaleString() : '₩0');
+            const taxVal = (item.fee !== undefined && item.fee !== null) ? item.fee : (item.tax || 0);
+            const taxText = isTransfer ? '₩0' : (taxVal ? '₩' + Number(taxVal).toLocaleString() : '₩0');
 
-            const isEditable = item.trade_id && Number(item.trade_id) > BASE_FIXED_TRADE_ID;
-            const cursorClass = isEditable ? 'cursor-pointer hover:bg-blue-50/40' : 'hover:bg-slate-50';
             const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
 
             return `
-                <tr class="transition border-b border-slate-100 text-[11px] leading-tight ${cursorClass} ${isEditable ? 'tx-editable-row' : ''}" data-tx="${isEditable ? itemJson : ''}">
+                <tr class="transition border-b border-slate-100 text-[11px] leading-tight cursor-pointer hover:bg-blue-50/40 tx-editable-row" data-tx="${itemJson}">
                   <td class="py-2 px-3 font-mono text-slate-600 whitespace-nowrap">${item.trade_date}</td>
                   <td class="py-2 px-2.5 font-medium text-slate-800 whitespace-nowrap">${item.account_name || item.account_id}</td>
                   <td class="py-2 px-2 text-center whitespace-nowrap">
@@ -347,12 +363,12 @@ function renderPaginatedRows() {
             else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
 
             const isTransfer = (item.trade_type === '출금' || item.trade_type === '입금');
-            const mobileTaxText = (!isTransfer && (item.tax || item.fee)) ? '세금 ₩' + Number(item.tax || item.fee).toLocaleString() : '';
-            const isEditable = item.trade_id && Number(item.trade_id) > BASE_FIXED_TRADE_ID;
+            const taxVal = (item.fee !== undefined && item.fee !== null) ? item.fee : (item.tax || 0);
+            const mobileTaxText = (!isTransfer && taxVal) ? '세금 ₩' + Number(taxVal).toLocaleString() : '';
             const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
 
             return `
-                <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs ${isEditable ? 'tx-editable-row' : ''}" data-tx="${isEditable ? itemJson : ''}">
+                <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs cursor-pointer hover:bg-slate-50 tx-editable-row" data-tx="${itemJson}">
                     <div class="flex justify-between items-center mb-1">
                         <div class="flex items-center gap-1.5">
                             <span class="font-bold text-slate-800">${item.account_name || item.account_id}</span>

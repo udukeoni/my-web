@@ -1,5 +1,5 @@
 // port/js/app.js
-// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 + PC/모바일 동기화 시간 말풍선 툴팁
+// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 + PC/모바일 정밀 2단계 동기화 인터랙션
 
 let currentAccount = 'ALL';
 let currentView = 'OVERVIEW'; // 기본값을 '자산 현황(OVERVIEW)'으로 설정
@@ -32,7 +32,6 @@ function formatKstDateTime(isoString) {
     const d = isoString ? new Date(isoString) : new Date();
     const pad = (n) => String(n).padStart(2, '0');
     
-    // 타임스탬프 기반 로컬 시간(KST) 추출
     const year = d.getFullYear();
     const month = pad(d.getMonth() + 1);
     const day = pad(d.getDate());
@@ -456,7 +455,7 @@ function setupTxModal() {
     }
 }
 
-// OCR 엔진 설정
+// 브라우저 클라이언트 OCR 엔진 및 텍스트 자동 파싱
 function setupOcrEngine() {
     const fileInput = document.getElementById('ocrFileInput');
     if (!fileInput) return;
@@ -642,15 +641,16 @@ function populateFieldsFromOcr(rawText) {
     toggleQtyAndPriceFields();
 }
 
-// 💡 공포탐욕지수 규격 동기화 버튼 & PC/모바일 반응형 말풍선 툴팁 컨트롤러
+// 💡 공포탐욕지수 규격 동기화 버튼 (모바일 1차 팝업 / 2차 동기화 / 2초 자동 닫힘 완벽 적용)
 function setupSyncPriceButton() {
     const btn = document.getElementById('btnSyncPrices');
     const icon = document.getElementById('syncIcon');
     const tooltip = document.getElementById('syncTooltip');
     const timeEl = document.getElementById('syncTooltipTime');
-    if (!btn) return;
+    if (!btn || !tooltip) return;
 
     let tooltipTimeout = null;
+    let isTooltipVisible = false;
 
     // 저장된 마지막 동기화 시각 화면 반영
     const updateTooltipText = (savedTime) => {
@@ -662,52 +662,32 @@ function setupSyncPriceButton() {
     updateTooltipText();
 
     const showTooltip = () => {
-        if (!tooltip) return;
         updateTooltipText();
         tooltip.classList.remove('hidden');
+        isTooltipVisible = true;
+
+        if (tooltipTimeout) clearTimeout(tooltipTimeout);
+        // 정확히 2초 후 자동 닫힘
+        tooltipTimeout = setTimeout(() => {
+            hideTooltip();
+        }, 2000);
     };
 
     const hideTooltip = () => {
-        if (!tooltip) return;
         tooltip.classList.add('hidden');
+        isTooltipVisible = false;
+        if (tooltipTimeout) {
+            clearTimeout(tooltipTimeout);
+            tooltipTimeout = null;
+        }
     };
 
-    // 1) PC 데스크톱 마우스 호버(Hover) 액션
-    btn.addEventListener('mouseenter', showTooltip);
-    btn.addEventListener('mouseleave', () => {
-        // 모바일 터치 중이 아니라면 마우스가 벗어날 때 숨김
-        if (!btn.dataset.touched) {
-            hideTooltip();
-        }
-    });
-
-    // 2) 모바일 터치(Touch) 액션 지원
-    btn.addEventListener('touchstart', () => {
-        btn.dataset.touched = "true";
-        showTooltip();
-        if (tooltipTimeout) clearTimeout(tooltipTimeout);
-        // 터치 시 3.5초간 말풍선 표시 후 자동 닫힘
-        tooltipTimeout = setTimeout(() => {
-            hideTooltip();
-            btn.removeAttribute('data-touched');
-        }, 3500);
-    }, { passive: true });
-
-    // 바깥 영역 클릭/터치 시 툴팁 닫기
-    document.addEventListener('click', (e) => {
-        if (!btn.contains(e.target) && tooltip && !tooltip.contains(e.target)) {
-            hideTooltip();
-            btn.removeAttribute('data-touched');
-        }
-    });
-
-    // 3) 클릭 시 현재가 동기화 + 당일 자산 스냅샷 동시 실행
-    btn.addEventListener('click', async () => {
+    // 실제 동기화 실행 (주가 갱신 + 당일 스냅샷 동시 트리거)
+    const executeSyncAction = async () => {
         btn.disabled = true;
         if (icon) icon.classList.add('fa-spin', 'text-blue-500');
 
         try {
-            // 현재가 동기화 API 호출
             const res = await fetch('/api/sync-prices', { method: 'POST' });
             const result = await res.json();
 
@@ -722,11 +702,8 @@ function setupSyncPriceButton() {
                 localStorage.setItem('PORTFOLIO_LAST_SYNC', currentSyncTime);
                 updateTooltipText(currentSyncTime);
 
-                // 동기화 완료 후에도 사용자에게 시간을 인지할 수 있도록 툴팁 잠깐 노출
+                // 동기화 완료 후 갱신된 시간을 2초간 띄워줌
                 showTooltip();
-                if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                tooltipTimeout = setTimeout(hideTooltip, 3000);
-
                 await fetchD1Portfolio();
             }
         } catch (err) {
@@ -734,6 +711,49 @@ function setupSyncPriceButton() {
         } finally {
             btn.disabled = false;
             if (icon) icon.classList.remove('fa-spin', 'text-blue-500');
+        }
+    };
+
+    // 1) PC 환경: 마우스 올리면 팝업 노출, 떼면 닫힘
+    btn.addEventListener('mouseenter', () => {
+        if (!window.matchMedia('(pointer: coarse)').matches) {
+            showTooltip();
+        }
+    });
+
+    btn.addEventListener('mouseleave', () => {
+        if (!window.matchMedia('(pointer: coarse)').matches) {
+            hideTooltip();
+        }
+    });
+
+    // 2) 클릭 인터랙션 (PC와 모바일 완벽 분기)
+    btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+
+        const isMobileTouch = window.matchMedia('(pointer: coarse)').matches;
+
+        if (isMobileTouch) {
+            if (!isTooltipVisible) {
+                // [모바일 1차 터치]: 팝업창만 띄우고 동기화는 절대 실행하지 않음!
+                showTooltip();
+                return;
+            } else {
+                // [모바일 2차 터치]: 팝업이 띄워져 있는 상태에서 다시 눌렀을 때만 동기화 시작!
+                hideTooltip();
+                await executeSyncAction();
+                return;
+            }
+        }
+
+        // PC 환경: 클릭 즉시 동기화 실행
+        await executeSyncAction();
+    });
+
+    // 3) 모바일/PC 공통: 팝업 외부 영역 클릭 시 즉시 닫기
+    document.addEventListener('click', (e) => {
+        if (!btn.contains(e.target) && !tooltip.contains(e.target)) {
+            hideTooltip();
         }
     });
 }

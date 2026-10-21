@@ -1,15 +1,17 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10건 자동 페이징 + 미래-연금 비중 헤더 클릭 시 확장/축소 토글)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (목표비중 인라인 편집/저장 + 밴드 상하한 ±2% 자동 연동)
 
 const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
 let currentPage = 1;
-let pageSize = 10; // 종목 10개 단위로 자동 커트
+let pageSize = 10;
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
-// 💡 미래-연금 밴드리밸런싱 확장 토글 상태 플래그 (기본값: false = 축소된 일반 뷰)
+// 미래-연금 밴드리밸런싱 확장 토글 상태 플래그
 let isRebalanceExpanded = false;
+// 목표비중 편집 모드 상태 플래그
+let isTargetWeightEditMode = false;
 
 function renderDataTable(viewType, dataList) {
     const thead = document.getElementById('tableHead');
@@ -23,8 +25,8 @@ function renderDataTable(viewType, dataList) {
     if (currentViewType !== viewType) {
         currentPage = 1;
         currentViewType = viewType;
-        // 다른 탭으로 이동 시 토글 상태 초기화
         isRebalanceExpanded = false;
+        isTargetWeightEditMode = false;
     }
     pageSize = 10;
     currentDataList = dataList || [];
@@ -49,7 +51,6 @@ function renderDataTable(viewType, dataList) {
         const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
                                  (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        // 미래-연금이고 확장 플래그가 켜졌을 때만 14개 열 와이드 헤더 표시
         const showWideRebalance = isPensionAccount && isRebalanceExpanded;
 
         if (title) {
@@ -63,7 +64,11 @@ function renderDataTable(viewType, dataList) {
         }
 
         if (showWideRebalance) {
-            // [펼쳐진 상태] 14개 열 와이드 헤더 (현재비중 클릭 시 축소 토글)
+            // [펼쳐진 상태] 목표비중 토글 버튼(수정 아이콘) 포함 14개 열 와이드 헤더
+            const targetWeightBtnIcon = isTargetWeightEditMode ? 'fa-check text-emerald-600 animate-bounce' : 'fa-pen-to-square text-emerald-700';
+            const targetWeightBtnTitle = isTargetWeightEditMode ? '수정 완료 및 저장' : '목표비중 수정';
+            const targetWeightBtnBg = isTargetWeightEditMode ? 'bg-emerald-200' : 'bg-emerald-100 hover:bg-emerald-200';
+
             thead.innerHTML = `
                 <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
                   <th class="py-2 px-3 text-left">종목명</th>
@@ -73,11 +78,18 @@ function renderDataTable(viewType, dataList) {
                   <th class="py-2 px-2.5 text-right">현재가</th>
                   <th class="py-2 px-3 text-right bg-slate-200/50">평가금액</th>
                   <th class="py-2 px-2.5 text-right">손익률</th>
-                  <!-- 💡 클릭 시 축소되는 인터랙티브 헤더 -->
                   <th id="thToggleRebalance" title="클릭 시 기본 테이블로 축소" class="py-2 px-2.5 text-right bg-blue-100 hover:bg-blue-200 text-blue-900 border-l border-blue-200 cursor-pointer transition select-none">
                     현재비중 <i class="fa-solid fa-compress text-[10px] ml-0.5 opacity-70"></i>
                   </th>
-                  <th class="py-2 px-2 text-right bg-emerald-50/70 text-emerald-900">목표비중</th>
+                  <!-- 💡 목표비중 헤더 토글 버튼 -->
+                  <th class="py-2 px-2 text-right bg-emerald-50/70 text-emerald-900">
+                    <div class="inline-flex items-center gap-1.5 justify-end">
+                      <span>목표비중</span>
+                      <button id="btnToggleTargetEdit" type="button" title="${targetWeightBtnTitle}" class="p-1 rounded ${targetWeightBtnBg} transition cursor-pointer active:scale-95 leading-none">
+                        <i class="fa-solid ${targetWeightBtnIcon} text-[11px]"></i>
+                      </button>
+                    </div>
+                  </th>
                   <th class="py-2 px-2 text-right text-slate-500">밴드하한</th>
                   <th class="py-2 px-2 text-right text-slate-500">밴드상한</th>
                   <th class="py-2 px-2.5 text-center bg-slate-200/60">상태 확인</th>
@@ -86,8 +98,7 @@ function renderDataTable(viewType, dataList) {
                 </tr>
             `;
         } else {
-            // [기본 상태] 모든 계좌 공통 9개 열 콤팩트 헤더
-            // 미래-연금 계좌일 경우 비중에 클릭 토글 스타일 및 아이콘 적용
+            // [기본 상태] 9개 열 콤팩트 헤더
             const weightHeaderHtml = isPensionAccount 
                 ? `<th id="thToggleRebalance" title="클릭 시 자산배분 밴드리밸런싱 분석 확장" class="py-2 px-2.5 text-right bg-blue-50/80 hover:bg-blue-100 text-blue-800 cursor-pointer transition select-none">
                     비중 <i class="fa-solid fa-expand text-[10px] ml-0.5 opacity-70"></i>
@@ -109,13 +120,31 @@ function renderDataTable(viewType, dataList) {
             `;
         }
 
-        // 💡 비중 헤더 클릭 이벤트 바인딩 (확장/축소 토글)
+        // 현재비중 헤더 토글 이벤트
         const toggleBtn = thead.querySelector('#thToggleRebalance');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 isRebalanceExpanded = !isRebalanceExpanded;
+                if (!isRebalanceExpanded) isTargetWeightEditMode = false;
                 renderDataTable('HOLDINGS', currentDataList);
+            });
+        }
+
+        // 목표비중 수정 토글 이벤트 바인딩
+        const btnToggleTargetEdit = thead.querySelector('#btnToggleTargetEdit');
+        if (btnToggleTargetEdit) {
+            btnToggleTargetEdit.addEventListener('click', async (e) => {
+                e.stopPropagation();
+
+                if (!isTargetWeightEditMode) {
+                    // 편집 모드 시작
+                    isTargetWeightEditMode = true;
+                    renderDataTable('HOLDINGS', currentDataList);
+                } else {
+                    // 편집 모드 종료 -> 인풋 값 수집 후 D1 DB 저장 및 리밸런싱 재계산
+                    await saveTargetWeightsAndRecalculate();
+                }
             });
         }
 
@@ -156,6 +185,83 @@ function renderDataTable(viewType, dataList) {
     updatePaginationControls();
 }
 
+// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드/매수매도액 재연산 함수
+async function saveTargetWeightsAndRecalculate() {
+    const inputs = document.querySelectorAll('.target-weight-input');
+    const updates = [];
+    const updatedMap = new Map();
+
+    inputs.forEach(input => {
+        const ticker = input.dataset.ticker;
+        const val = parseFloat(input.value);
+        if (ticker && !isNaN(val) && val >= 0) {
+            updates.push({ ticker, target_weight: val });
+            updatedMap.set(ticker, val);
+        }
+    });
+
+    const activeAccount = (typeof currentAccount !== 'undefined') ? currentAccount : 'MIRAE_PENSION';
+
+    try {
+        // 백엔드 rebalance.js 호출하여 DB 일괄 저장
+        const res = await fetch('/api/rebalance', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                account_id: activeAccount,
+                updates: updates
+            })
+        });
+        const result = await res.json();
+        if (!result.success) {
+            throw new Error(result.error || '목표비중 저장 실패');
+        }
+
+        // 전체 순자산(Net Worth) 산출
+        let totalNetWorth = 0;
+        if (typeof cachedSummary !== 'undefined' && cachedSummary && cachedSummary.netWorth) {
+            totalNetWorth = Number(cachedSummary.netWorth);
+        } else {
+            totalNetWorth = currentDataList.reduce((sum, item) => sum + (Number(item.eval_amount) || 0), 0);
+        }
+
+        // 메모리에 로드된 종목 리스트 재계산 (밴드 상하한 ±2%, 상태확인, 매수/매도액, 조정 주식 수)
+        currentDataList.forEach(item => {
+            if (updatedMap.has(item.ticker)) {
+                const newTarget = updatedMap.get(item.ticker);
+                const newBandMin = Math.max(0, Number((newTarget - 2.0).toFixed(2)));
+                const newBandMax = Number((newTarget + 2.0).toFixed(2));
+                const currentWeight = Number(item.weight) || 0;
+                const currentEval = Number(item.eval_amount) || 0;
+
+                let newStatus = '유지';
+                if (currentWeight < newBandMin) newStatus = '매수';
+                else if (currentWeight > newBandMax) newStatus = '매도';
+
+                const targetEval = totalNetWorth * (newTarget / 100);
+                const diffAmount = Math.round(targetEval - currentEval);
+                let adjustShares = 0;
+                if (!item.isCash && item.current_price > 0) {
+                    adjustShares = Math.round(diffAmount / item.current_price);
+                }
+
+                item.target_weight = newTarget;
+                item.band_min = newBandMin;
+                item.band_max = newBandMax;
+                item.rebalance_status = newStatus;
+                item.diff_amount = diffAmount;
+                item.adjust_shares = adjustShares;
+            }
+        });
+
+        isTargetWeightEditMode = false;
+        renderDataTable('HOLDINGS', currentDataList);
+
+    } catch (err) {
+        alert('목표비중 수정 중 오류가 발생했습니다: ' + err.message);
+    }
+}
+
 function renderPaginatedRows() {
     const tbody = document.getElementById('tableBody');
     const mobileList = document.getElementById('mobileCardList');
@@ -176,7 +282,7 @@ function renderPaginatedRows() {
     if (currentViewType === 'HOLDINGS') {
         const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
         const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
-                                   (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
+                                 (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
         // 미래-연금이고 확장 토글이 켜진 경우에만 14개 열 와이드 본문 렌더링
         if (isPensionAccount && isRebalanceExpanded) {
@@ -207,6 +313,23 @@ function renderPaginatedRows() {
                     else adjText = '0주';
                 }
 
+                // 💡 편집 모드일 때는 인풋 박스로 전환, 아닐 때는 기존 텍스트 표시
+                let targetWeightDisplay = '';
+                if (isTargetWeightEditMode) {
+                    const currentTargetVal = (item.target_weight !== null && item.target_weight !== undefined) ? item.target_weight : '';
+                    targetWeightDisplay = `
+                        <div class="inline-flex items-center gap-0.5 justify-end">
+                          <input type="number" step="0.1" min="0" max="100" 
+                                 data-ticker="${item.ticker}" 
+                                 value="${currentTargetVal}" 
+                                 class="target-weight-input w-14 border border-emerald-300 rounded px-1.5 py-0.5 text-right font-mono font-bold text-emerald-800 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 text-[11px]" />
+                          <span class="text-emerald-700 font-bold">%</span>
+                        </div>
+                    `;
+                } else {
+                    targetWeightDisplay = item.target_weight !== null ? `${item.target_weight}%` : '-';
+                }
+
                 return `
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
                       <td class="py-2 px-3 font-semibold text-slate-900">${item.asset_name}</td>
@@ -217,7 +340,7 @@ function renderPaginatedRows() {
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/70">₩${Number(item.eval_amount).toLocaleString()}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/40 border-l border-blue-50">${item.weight}%</td>
-                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${item.target_weight !== null ? item.target_weight + '%' : '-'}</td>
+                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${targetWeightDisplay}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_min !== null ? item.band_min.toFixed(2) + '%' : '-'}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_max !== null ? item.band_max.toFixed(2) + '%' : '-'}</td>
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>

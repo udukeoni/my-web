@@ -171,7 +171,7 @@ export async function onRequestGet(context) {
             
             (rebRes.results || []).forEach(r => {
                 rebalanceSettingsMap.set(`${r.account_id}_${r.ticker}`, r);
-                // 💡 예수금(CASH) 설정값 발견 시 추출 보관
+                // 💡 예수금(CASH) 설정값 발견 시 보관하여 프론트엔드로 전달
                 if (r.ticker === 'CASH') {
                     rebalanceCashSetting = r;
                 }
@@ -257,7 +257,7 @@ export async function onRequestGet(context) {
             },
             accounts,
             holdings: holdingsWithWeight,
-            rebalanceCashSetting, // 💡 프론트엔드가 즉시 읽을 수 있도록 예수금 D1 설정값 반환
+            rebalanceCashSetting, // 💡 D1 DB에 저장된 예수금 설정값을 프론트엔드로 전달
             logs,
             chartData: {
                 daily: dailyHistory

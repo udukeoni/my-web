@@ -1,5 +1,5 @@
 // functions/api/portfolio.js
-// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 기준 회계 연산
+// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 기준 회계 연산 + 예수금(CASH) 리밸런싱 설정 연동
 
 export async function onRequestGet(context) {
     const { request, env } = context;
@@ -160,14 +160,21 @@ export async function onRequestGet(context) {
 
         // 6. 리밸런싱 설정값 조회 및 계산 맵 구성
         let rebalanceSettingsMap = new Map();
+        let rebalanceCashSetting = null;
+
         try {
             const rebQuery = accountFilter === 'ALL'
                 ? "SELECT account_id, ticker, target_weight, band_min, band_max FROM rebalance_settings"
                 : "SELECT account_id, ticker, target_weight, band_min, band_max FROM rebalance_settings WHERE account_id = ?";
             const rebStmt = db.prepare(rebQuery);
             const rebRes = accountFilter === 'ALL' ? await rebStmt.all() : await rebStmt.bind(accountFilter).all();
+            
             (rebRes.results || []).forEach(r => {
                 rebalanceSettingsMap.set(`${r.account_id}_${r.ticker}`, r);
+                // 💡 예수금(CASH) 설정값 발견 시 추출 보관
+                if (r.ticker === 'CASH') {
+                    rebalanceCashSetting = r;
+                }
             });
         } catch (rebErr) {
             console.error("리밸런싱 설정 조회 예외:", rebErr.message);
@@ -250,6 +257,7 @@ export async function onRequestGet(context) {
             },
             accounts,
             holdings: holdingsWithWeight,
+            rebalanceCashSetting, // 💡 프론트엔드가 즉시 읽을 수 있도록 예수금 D1 설정값 반환
             logs,
             chartData: {
                 daily: dailyHistory

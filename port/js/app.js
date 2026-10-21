@@ -93,7 +93,7 @@ async function fetchD1Portfolio() {
             };
         });
 
-        // 7. 예수금(CASH) 가상 종목 추가 시 밴드리밸런싱 연산 보존 (💡 하드코딩 10% 제거 및 D1 DB 설정값 우선 적용!)
+        // 7. 예수금(CASH) 가상 종목 추가 시 밴드리밸런싱 연산 보존 (💡 D1 DB rebalance_settings 직통 연동!)
         if (cashBalance > 0) {
             const cashWeight = totalNetWorth > 0 ? Number(((cashBalance / totalNetWorth) * 100).toFixed(2)) : 0;
             
@@ -114,20 +114,19 @@ async function fetchD1Portfolio() {
             let cashDiffAmount = 0;
 
             if (isPensionAccount) {
-                // 💡 DB에서 불러온 예수금(CASH) 설정값이 있는지 확인
-                const cashSetting = cachedHoldings.find(h => h.ticker === 'CASH') || {};
-                
-                // DB에 저장된 값이 있으면 그 값을 우선 적용하고, 없을 때만 기본 10% 적용
-                cashTargetWeight = (cashSetting.target_weight !== undefined && cashSetting.target_weight !== null) 
-                    ? Number(cashSetting.target_weight) 
-                    : (data.rebalanceCashSetting ? Number(data.rebalanceCashSetting.target_weight) : 10.0);
+                // 💡 D1 DB에서 조회되어 내려온 data.rebalanceCashSetting을 1순위로 직통 연결!
+                const cashDbSetting = data.rebalanceCashSetting || {};
 
-                cashBandMin = (cashSetting.band_min !== undefined && cashSetting.band_min !== null)
-                    ? Number(cashSetting.band_min)
+                cashTargetWeight = (cashDbSetting.target_weight !== undefined && cashDbSetting.target_weight !== null)
+                    ? Number(cashDbSetting.target_weight)
+                    : 10.0;
+
+                cashBandMin = (cashDbSetting.band_min !== undefined && cashDbSetting.band_min !== null)
+                    ? Number(cashDbSetting.band_min)
                     : Math.max(0, Number((cashTargetWeight - 2.0).toFixed(2)));
 
-                cashBandMax = (cashSetting.band_max !== undefined && cashSetting.band_max !== null)
-                    ? Number(cashSetting.band_max)
+                cashBandMax = (cashDbSetting.band_max !== undefined && cashDbSetting.band_max !== null)
+                    ? Number(cashDbSetting.band_max)
                     : Number((cashTargetWeight + 2.0).toFixed(2));
 
                 if (cashWeight < cashBandMin) {

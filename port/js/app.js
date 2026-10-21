@@ -93,7 +93,7 @@ async function fetchD1Portfolio() {
             };
         });
 
-        // 7. 예수금(CASH) 가상 종목 추가 시 밴드리밸런싱 연산 보존
+        // 7. 예수금(CASH) 가상 종목 추가 시 밴드리밸런싱 연산 보존 (💡 하드코딩 10% 제거 및 D1 DB 설정값 우선 적용!)
         if (cashBalance > 0) {
             const cashWeight = totalNetWorth > 0 ? Number(((cashBalance / totalNetWorth) * 100).toFixed(2)) : 0;
             
@@ -103,20 +103,32 @@ async function fetchD1Portfolio() {
                 if (found) accName = found.account_name;
             }
 
+            const isPensionAccount = (currentAccount === 'MIRAE_PENSION') || 
+                                     (accName && accName.includes('연금')) || 
+                                     (currentAccount && currentAccount.includes('연금'));
+
             let cashTargetWeight = null;
             let cashBandMin = null;
             let cashBandMax = null;
             let cashStatus = '유지';
             let cashDiffAmount = 0;
 
-            const isPensionAccount = (currentAccount === 'MIRAE_PENSION') || 
-                                     (accName && accName.includes('연금')) || 
-                                     (currentAccount && currentAccount.includes('연금'));
-
             if (isPensionAccount) {
-                cashTargetWeight = 10.0;
-                cashBandMin = 8.0;
-                cashBandMax = 12.0;
+                // 💡 DB에서 불러온 예수금(CASH) 설정값이 있는지 확인
+                const cashSetting = cachedHoldings.find(h => h.ticker === 'CASH') || {};
+                
+                // DB에 저장된 값이 있으면 그 값을 우선 적용하고, 없을 때만 기본 10% 적용
+                cashTargetWeight = (cashSetting.target_weight !== undefined && cashSetting.target_weight !== null) 
+                    ? Number(cashSetting.target_weight) 
+                    : (data.rebalanceCashSetting ? Number(data.rebalanceCashSetting.target_weight) : 10.0);
+
+                cashBandMin = (cashSetting.band_min !== undefined && cashSetting.band_min !== null)
+                    ? Number(cashSetting.band_min)
+                    : Math.max(0, Number((cashTargetWeight - 2.0).toFixed(2)));
+
+                cashBandMax = (cashSetting.band_max !== undefined && cashSetting.band_max !== null)
+                    ? Number(cashSetting.band_max)
+                    : Number((cashTargetWeight + 2.0).toFixed(2));
 
                 if (cashWeight < cashBandMin) {
                     cashStatus = '매수';
@@ -126,7 +138,7 @@ async function fetchD1Portfolio() {
                     cashStatus = '유지';
                 }
 
-                const targetCashVal = totalNetWorth * 0.10;
+                const targetCashVal = totalNetWorth * (cashTargetWeight / 100.0);
                 cashDiffAmount = Math.round(targetCashVal - cashBalance);
             }
 

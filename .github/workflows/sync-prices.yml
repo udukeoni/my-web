@@ -1,12 +1,13 @@
 # .github/workflows/sync-prices.yml
-name: 평일 장마감 종가 동기화 및 일별 자산 스냅샷
+name: 주가 최신 종가 동기화 및 일별 자산 스냅샷 (6시간 주기)
 
 on:
   schedule:
-    # 평일 장마감 직후 일 1회 실행 (한국 시간 15:40 / UTC 06:40)
-    - cron: '40 6 * * 1-5'
+    # 한국 시간(KST) 기준 09:17, 15:17, 21:17, 03:17 (UTC 00:17, 06:17, 12:17, 18:17)
+    # 오전 9시 장시작 직후부터 6시간 간격 실행 (정각 병목 회피를 위해 17분 설정)
+    - cron: '17 0,6,12,18 * * *'
 
-  workflow_dispatch: # 필요 시 깃허브 웹에서 [Run workflow]로 수동 즉시 실행 가능
+  workflow_dispatch: # 필요 시 깃허브 웹 Actions 탭에서 [Run workflow]로 수동 즉시 실행 가능
 
 jobs:
   sync-daily:

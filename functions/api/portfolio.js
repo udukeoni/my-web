@@ -1,5 +1,5 @@
 // functions/api/portfolio.js
-// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 기준 회계 연산 + 예수금(CASH) 리밸런싱 설정 연동
+// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 회계 + 밴드 배율(하한 x0.8, 상한 x1.2) 백엔드 자동 연산
 
 export async function onRequestGet(context) {
     const { request, env } = context;
@@ -171,16 +171,21 @@ export async function onRequestGet(context) {
             
             (rebRes.results || []).forEach(r => {
                 rebalanceSettingsMap.set(`${r.account_id}_${r.ticker}`, r);
-                // 💡 예수금(CASH) 설정값 발견 시 보관하여 프론트엔드로 전달
                 if (r.ticker === 'CASH') {
-                    rebalanceCashSetting = r;
+                    // 💡 예수금도 밴드 배율 공식(x0.8, x1.2)으로 보정
+                    const cTarget = Number(r.target_weight);
+                    rebalanceCashSetting = {
+                        ...r,
+                        band_min: Number((cTarget * 0.8).toFixed(2)),
+                        band_max: Number((cTarget * 1.2).toFixed(2))
+                    };
                 }
             });
         } catch (rebErr) {
             console.error("리밸런싱 설정 조회 예외:", rebErr.message);
         }
 
-        // 종목별 비중 및 밴드리밸런싱 자동 연산
+        // 종목별 비중 및 밴드리밸런싱 자동 연산 (💡 DB의 옛날 값 대신 x0.8, x1.2 배율 공식 적용)
         const holdingsWithWeight = holdings.map(item => {
             const currentEval = item.eval_amount || 0;
             const currentWeight = netWorth > 0 ? Number(((currentEval / netWorth) * 100).toFixed(2)) : 0;
@@ -197,8 +202,9 @@ export async function onRequestGet(context) {
 
             if (setting) {
                 targetWeight = Number(setting.target_weight);
-                bandMin = Number(setting.band_min);
-                bandMax = Number(setting.band_max);
+                // 💡 엑셀 원본 공식: 밴드하한 = 목표비중 x 0.8, 밴드상한 = 목표비중 x 1.2
+                bandMin = Number((targetWeight * 0.8).toFixed(2));
+                bandMax = Number((targetWeight * 1.2).toFixed(2));
 
                 if (currentWeight < bandMin) {
                     status = '매수';
@@ -257,7 +263,7 @@ export async function onRequestGet(context) {
             },
             accounts,
             holdings: holdingsWithWeight,
-            rebalanceCashSetting, // 💡 D1 DB에 저장된 예수금 설정값을 프론트엔드로 전달
+            rebalanceCashSetting,
             logs,
             chartData: {
                 daily: dailyHistory

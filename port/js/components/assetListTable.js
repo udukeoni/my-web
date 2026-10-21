@@ -1,5 +1,5 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (목표비중 헤더 자체를 수정/저장 원클릭 토글로 일체화)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (목표비중 헤더 원클릭 토글 + 밴드 배율 공식: 하한 x0.8, 상한 x1.2)
 
 const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
@@ -65,7 +65,7 @@ function renderDataTable(viewType, dataList) {
         }
 
         if (showWideRebalance) {
-            // [1단계 확장 상태]: 14개 열 와이드 헤더 & 💡 별도 [수정] 버튼 없이 헤더 자체를 슬림 토글로 구성
+            // [1단계 확장 상태]: 14개 열 와이드 헤더 & 💡 별도 [수정] 버튼 박스를 완전히 없앤 헤더 자체 토글
             const targetWeightBtnTitle = isTargetWeightEditMode ? '클릭 시 비중 저장 및 적용' : '클릭 시 목표비중 수정';
             const targetHeaderBg = isTargetWeightEditMode 
                 ? 'bg-emerald-200 text-emerald-950 font-black ring-1 ring-inset ring-emerald-500' 
@@ -88,7 +88,7 @@ function renderDataTable(viewType, dataList) {
                   <th id="thToggleRebalance" title="클릭 시 기본 테이블로 축소" class="py-2 px-2.5 text-right bg-blue-100 hover:bg-blue-200 text-blue-900 border-l border-blue-200 cursor-pointer transition select-none">
                     현재비중 <i class="fa-solid fa-compress text-[10px] ml-0.5 opacity-70"></i>
                   </th>
-                  <!-- 💡 별도 버튼 박스를 없애고 헤더 자체가 클릭형 토글로 동작 (열 폭 슬림화) -->
+                  <!-- 💡 별도 수정버튼 없이 헤더 자체가 클릭형 토글로 동작하여 열 폭 최소화 -->
                   <th id="btnToggleTargetEdit" title="${targetWeightBtnTitle}" class="py-2 px-2 text-right cursor-pointer transition select-none ${targetHeaderBg}">
                     ${targetHeaderText} ${targetHeaderIcon}
                   </th>
@@ -189,7 +189,7 @@ function renderDataTable(viewType, dataList) {
     updatePaginationControls();
 }
 
-// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드(±2%)/매수매도액 재연산 함수
+// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드(하한 x0.8, 상한 x1.2)/매수매도액 재연산 함수
 async function saveTargetWeightsAndRecalculate() {
     const inputs = document.querySelectorAll('.target-weight-input');
     const updates = [];
@@ -229,12 +229,12 @@ async function saveTargetWeightsAndRecalculate() {
             totalNetWorth = currentDataList.reduce((sum, item) => sum + (Number(item.eval_amount) || 0), 0);
         }
 
-        // 메모리에 로드된 종목 리스트 재계산 (밴드 상하한 ±2%, 상태확인, 매수/매도액, 조정 주식 수)
+        // 메모리에 로드된 종목 리스트 재계산 (💡 밴드 공식: 하한 x0.8, 상한 x1.2)
         currentDataList.forEach(item => {
             if (updatedMap.has(item.ticker)) {
                 const newTarget = updatedMap.get(item.ticker);
-                const newBandMin = Math.max(0, Number((newTarget - 2.0).toFixed(2)));
-                const newBandMax = Number((newTarget + 2.0).toFixed(2));
+                const newBandMin = Number((newTarget * 0.8).toFixed(2));
+                const newBandMax = Number((newTarget * 1.2).toFixed(2));
                 const currentWeight = Number(item.weight) || 0;
                 const currentEval = Number(item.eval_amount) || 0;
 
@@ -334,6 +334,10 @@ function renderPaginatedRows() {
                     targetWeightDisplay = item.target_weight !== null ? `${item.target_weight}%` : '-';
                 }
 
+                // 💡 밴드 표시: DB 또는 목표비중 x0.8, x1.2 기준 보정 출력
+                const calcBandMin = item.target_weight !== null ? (item.target_weight * 0.8).toFixed(2) + '%' : '-';
+                const calcBandMax = item.target_weight !== null ? (item.target_weight * 1.2).toFixed(2) + '%' : '-';
+
                 return `
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
                       <td class="py-2 px-3 font-semibold text-slate-900">${item.asset_name}</td>
@@ -345,8 +349,8 @@ function renderPaginatedRows() {
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/40 border-l border-blue-50">${item.weight}%</td>
                       <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${targetWeightDisplay}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_min !== null ? item.band_min.toFixed(2) + '%' : '-'}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-500">${item.band_max !== null ? item.band_max.toFixed(2) + '%' : '-'}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-500">${calcBandMin}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-500">${calcBandMax}</td>
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
                       <td class="py-2 px-3 text-right font-mono font-medium text-slate-500 border-l border-slate-100">${diffText}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-500">${adjText}</td>
@@ -376,6 +380,9 @@ function renderPaginatedRows() {
                     else if (adjShares < 0) adjText = `(-${Math.abs(adjShares).toLocaleString()}주)`;
                 }
 
+                const mobileBandMin = item.target_weight !== null ? (item.target_weight * 0.8).toFixed(1) : 0;
+                const mobileBandMax = item.target_weight !== null ? (item.target_weight * 1.2).toFixed(1) : 0;
+
                 return `
                     <div class="py-2.5 px-3 bg-white border-b border-slate-100 text-xs">
                         <div class="flex justify-between items-center mb-1.5">
@@ -387,7 +394,7 @@ function renderPaginatedRows() {
                             <span class="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">목표 ${item.target_weight || '-'}%</span>
                         </div>
                         <div class="flex justify-between items-center text-[11px] pt-1 border-t border-slate-50">
-                            <span class="text-slate-400">밴드 ${item.band_min || 0}% ~ ${item.band_max || 0}%</span>
+                            <span class="text-slate-400">밴드 ${mobileBandMin}% ~ ${mobileBandMax}%</span>
                             <span class="font-medium text-slate-500">조정 ${diffText} ${adjText}</span>
                         </div>
                     </div>

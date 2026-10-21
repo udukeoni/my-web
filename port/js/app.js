@@ -1,5 +1,5 @@
 // port/js/app.js
-// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식(종목 정밀 매칭 및 세후 정산금 연동)
+// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 + PC/모바일 동기화 시간 말풍선 툴팁
 
 let currentAccount = 'ALL';
 let currentView = 'OVERVIEW'; // 기본값을 '자산 현황(OVERVIEW)'으로 설정
@@ -25,6 +25,22 @@ function getStoredDailyRates() {
     } catch (_) {
         return {};
     }
+}
+
+// 한국 시간(KST) YYYY-MM-DD HH:mm:ss 포맷팅 헬퍼
+function formatKstDateTime(isoString) {
+    const d = isoString ? new Date(isoString) : new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    
+    // 타임스탬프 기반 로컬 시간(KST) 추출
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    const seconds = pad(d.getSeconds());
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 async function fetchD1Portfolio() {
@@ -292,7 +308,6 @@ function setupTxModal() {
     const inputTax = document.getElementById('txTax');
     const inputMemo = document.getElementById('txMemo');
 
-    // 모달 좌측 하단 이미지 업로드 버튼 및 파일 인풋
     const btnModalOcr = document.getElementById('btnModalOcrUpload');
     const fileInput = document.getElementById('ocrFileInput');
 
@@ -441,7 +456,7 @@ function setupTxModal() {
     }
 }
 
-// 브라우저 클라이언트 OCR 엔진 및 텍스트 자동 파싱
+// OCR 엔진 설정
 function setupOcrEngine() {
     const fileInput = document.getElementById('ocrFileInput');
     if (!fileInput) return;
@@ -489,28 +504,25 @@ function setupOcrEngine() {
     });
 }
 
-// 💡 알림톡/앱 캡처 텍스트 정밀 매칭 및 입력 폼 자동 채우기 (DB 종목코드 직통 매칭 엔진)
 function populateFieldsFromOcr(rawText) {
     const cleanText = rawText.replace(/\s+/g, ' ');
     const noSpaceText = rawText.replace(/[\s\r\n\t]/g, '');
 
-    // 1. 계좌 식별 (끝자리 엄격 매칭)
     let detectedAccountId = '';
     if (/[-*]01\b|[-*]01\D/.test(cleanText) || noSpaceText.includes('-01') || noSpaceText.includes('*****01')) {
-        detectedAccountId = 'SAMSUNG_GEN';     // 삼성-일반
+        detectedAccountId = 'SAMSUNG_GEN';
     } else if (/[-*]14\b|[-*]14\D/.test(cleanText) || noSpaceText.includes('-14') || noSpaceText.includes('*****14')) {
-        detectedAccountId = 'SAMSUNG_ISA';     // 삼성-ISA
+        detectedAccountId = 'SAMSUNG_ISA';
     } else if (/[-*]15\b|[-*]15\D/.test(cleanText) || noSpaceText.includes('-15') || noSpaceText.includes('*****15')) {
-        detectedAccountId = 'SAMSUNG_PENSION'; // 삼성-연금
+        detectedAccountId = 'SAMSUNG_PENSION';
     } else if (/[-*]05\b|[-*]05\D/.test(cleanText) || noSpaceText.includes('-05') || noSpaceText.includes('*****05')) {
-        detectedAccountId = 'SAMSUNG_CMA';     // 삼성-CMA
+        detectedAccountId = 'SAMSUNG_CMA';
     } else if (/80-0/.test(cleanText) || noSpaceText.includes('80-0')) {
-        detectedAccountId = 'MIRAE_PENSION';   // 미래-연금
+        detectedAccountId = 'MIRAE_PENSION';
     } else if (/40-0/.test(cleanText) || noSpaceText.includes('40-0')) {
-        detectedAccountId = 'MIRAE_01';        // 미래에셋 일반
+        detectedAccountId = 'MIRAE_01';
     }
 
-    // 2. 일자 추출 (삼성/미래 알림톡 공통 날짜 추출)
     let detectedDate = new Date().toISOString().split('T')[0];
     const dateMatch = cleanText.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
     if (dateMatch) {
@@ -520,18 +532,15 @@ function populateFieldsFromOcr(rawText) {
         detectedDate = `${y}-${m}-${d}`;
     }
 
-    // 3. 💡 [사용자 지시 완벽 반영] 미래에셋 'A' 제거 후 DB 티커 직통 매칭 & 삼성 13자리 검색
     let detectedTicker = '';
     let detectedName = '';
     const stockSelect = document.getElementById('txStock');
 
-    // 3-1) 미래에셋 'A'로 시작하는 6자리 종목코드 추출 (A441640 -> 441640, A495050 -> 495050, A0008S0 -> 0008S0)
     const codeMatch = cleanText.match(/A([0-9A-Z]{6})\b/i) || noSpaceText.match(/A([0-9A-Z]{6})/i);
     let strippedTicker = codeMatch ? codeMatch[1].toUpperCase() : '';
 
     if (stockSelect) {
         if (strippedTicker) {
-            // DB에 등록된 셀렉트박스 옵션의 value와 1:1 직통 대조!
             for (let i = 0; i < stockSelect.options.length; i++) {
                 if (stockSelect.options[i].value.toUpperCase() === strippedTicker) {
                     detectedTicker = stockSelect.options[i].value;
@@ -541,7 +550,6 @@ function populateFieldsFromOcr(rawText) {
             }
         }
 
-        // 3-2) 코드가 없는 삼성증권의 경우: 13자리/8자리 부분 유사도 검색
         if (!detectedTicker) {
             let rawTargetName = '';
             const nameBlockMatch = cleanText.match(/(?:종목명|ETF분배금)\s*[:：]?\s*([^\n\r]+)/);
@@ -577,7 +585,6 @@ function populateFieldsFromOcr(rawText) {
         }
     }
 
-    // 4. 금액 및 세금 파싱 헬퍼 (숫자 앞뒤 노이즈 완벽 분리 및 11,092 앞자리 탈락 방어)
     const extractAmount = (regex) => {
         const match = cleanText.match(regex);
         if (!match) return 0;
@@ -585,7 +592,6 @@ function populateFieldsFromOcr(rawText) {
         return Number(numStr) || 0;
     };
 
-    // 4-1) 세금 파싱
     let totalTax = 0;
     const singleTax = extractAmount(/(?:^|\s)세\s*금\s*[:：]?\s*([0-9,]+)\s*원/);
     if (singleTax > 0) {
@@ -596,7 +602,6 @@ function populateFieldsFromOcr(rawText) {
         totalTax = incTax + locTax;
     }
 
-    // 4-2) 세전 분배금액(배정금액) 추출 (콜론 노이즈 및 앞자리 1 탈락 완벽 방어)
     let grossAmount = 0;
     const grossPatternMatch = cleanText.match(/(?:배정금액|세전\s*분배금액)[^0-9]*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\s*원/);
     if (grossPatternMatch) {
@@ -605,7 +610,6 @@ function populateFieldsFromOcr(rawText) {
         grossAmount = extractAmount(/(?:배정금액|세전\s*분배금액)\s*[:：]?\s*([0-9,]+)\s*원/);
     }
 
-    // 5. 모달창 입력 필드에 안전 주입
     const inputDate = document.getElementById('txDate');
     const selectAcc = document.getElementById('txAccount');
     const selectType = document.getElementById('txType');
@@ -618,12 +622,10 @@ function populateFieldsFromOcr(rawText) {
     if (selectAcc && detectedAccountId) selectAcc.value = detectedAccountId;
     if (selectType) selectType.value = '분배금';
     
-    // 💡 DB에서 찾은 정확한 종목코드로 즉시 선택
     if (stockSelect && detectedTicker) {
         stockSelect.value = detectedTicker;
     }
     
-    // 세전 금액 온전 주입 (11092원 정상 주입)
     if (inputAmount) inputAmount.value = grossAmount || '';
     if (inputTax) inputTax.value = totalTax;
 
@@ -640,23 +642,91 @@ function populateFieldsFromOcr(rawText) {
     toggleQtyAndPriceFields();
 }
 
+// 💡 공포탐욕지수 규격 동기화 버튼 & PC/모바일 반응형 말풍선 툴팁 컨트롤러
 function setupSyncPriceButton() {
     const btn = document.getElementById('btnSyncPrices');
     const icon = document.getElementById('syncIcon');
+    const tooltip = document.getElementById('syncTooltip');
+    const timeEl = document.getElementById('syncTooltipTime');
     if (!btn) return;
 
+    let tooltipTimeout = null;
+
+    // 저장된 마지막 동기화 시각 화면 반영
+    const updateTooltipText = (savedTime) => {
+        if (!timeEl) return;
+        const timeToDisplay = savedTime || localStorage.getItem('PORTFOLIO_LAST_SYNC') || formatKstDateTime();
+        timeEl.textContent = timeToDisplay;
+    };
+
+    updateTooltipText();
+
+    const showTooltip = () => {
+        if (!tooltip) return;
+        updateTooltipText();
+        tooltip.classList.remove('hidden');
+    };
+
+    const hideTooltip = () => {
+        if (!tooltip) return;
+        tooltip.classList.add('hidden');
+    };
+
+    // 1) PC 데스크톱 마우스 호버(Hover) 액션
+    btn.addEventListener('mouseenter', showTooltip);
+    btn.addEventListener('mouseleave', () => {
+        // 모바일 터치 중이 아니라면 마우스가 벗어날 때 숨김
+        if (!btn.dataset.touched) {
+            hideTooltip();
+        }
+    });
+
+    // 2) 모바일 터치(Touch) 액션 지원
+    btn.addEventListener('touchstart', () => {
+        btn.dataset.touched = "true";
+        showTooltip();
+        if (tooltipTimeout) clearTimeout(tooltipTimeout);
+        // 터치 시 3.5초간 말풍선 표시 후 자동 닫힘
+        tooltipTimeout = setTimeout(() => {
+            hideTooltip();
+            btn.removeAttribute('data-touched');
+        }, 3500);
+    }, { passive: true });
+
+    // 바깥 영역 클릭/터치 시 툴팁 닫기
+    document.addEventListener('click', (e) => {
+        if (!btn.contains(e.target) && tooltip && !tooltip.contains(e.target)) {
+            hideTooltip();
+            btn.removeAttribute('data-touched');
+        }
+    });
+
+    // 3) 클릭 시 현재가 동기화 + 당일 자산 스냅샷 동시 실행
     btn.addEventListener('click', async () => {
         btn.disabled = true;
         if (icon) icon.classList.add('fa-spin', 'text-blue-500');
 
         try {
+            // 현재가 동기화 API 호출
             const res = await fetch('/api/sync-prices', { method: 'POST' });
             const result = await res.json();
+
+            // 당일 자산 스냅샷도 백그라운드에서 함께 즉시 기록
+            fetch('/api/snapshot-daily', { method: 'POST' }).catch(() => {});
 
             if (result.success) {
                 if (result.dailyRates) {
                     localStorage.setItem('DAILY_RATES_CACHE', JSON.stringify(result.dailyRates));
                 }
+                const currentSyncTime = formatKstDateTime(result.updatedAt);
+                localStorage.setItem('PORTFOLIO_LAST_SYNC', currentSyncTime);
+                updateTooltipText(currentSyncTime);
+
+                // 동기화 완료 후에도 사용자에게 시간을 인지할 수 있도록 툴팁 잠깐 노출
+                showTooltip();
+                if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                tooltipTimeout = setTimeout(hideTooltip, 3000);
+
                 await fetchD1Portfolio();
             }
         } catch (err) {

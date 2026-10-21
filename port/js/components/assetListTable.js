@@ -1,16 +1,16 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (목표비중 헤더 원클릭 토글 + 밴드 배율 공식: 하한 x0.8, 상한 x1.2)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (목표비중 헤더 순수 텍스트 토글 + 밴드 공식 x0.8, x1.2 실시간 연동)
 
-const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
+const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용[cite: 49]
 
 let currentPage = 1;
 let pageSize = 10;
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
-// 💡 1단계: 미래-연금 밴드리밸런싱 확장 토글 상태 플래그 (기본값: false = 축소된 일반 9열 뷰)
+// 💡 1단계: 미래-연금 밴드리밸런싱 확장 토글 상태 플래그 (기본값: false = 축소된 일반 9열 뷰)[cite: 49]
 let isRebalanceExpanded = false;
-// 💡 2단계: 목표비중 편집 모드 상태 플래그
+// 💡 2단계: 목표비중 편집 모드 상태 플래그[cite: 49]
 let isTargetWeightEditMode = false;
 
 function renderDataTable(viewType, dataList) {
@@ -31,7 +31,7 @@ function renderDataTable(viewType, dataList) {
     pageSize = 10;
     currentDataList = dataList || [];
 
-    // 거래내역 입력 버튼 제어
+    // 거래내역 입력 버튼 제어[cite: 49]
     const headerContainer = title ? title.closest('.flex.items-center.justify-between') : null;
     let btnOpenModal = document.getElementById('btnOpenTxModal');
     if (headerContainer && !btnOpenModal) {
@@ -44,14 +44,14 @@ function renderDataTable(viewType, dataList) {
     }
 
     // ==========================================
-    // 1. 보유 종목 (HOLDINGS) 헤더 세팅
+    // 1. 보유 종목 (HOLDINGS) 헤더 세팅[cite: 49]
     // ==========================================
     if (viewType === 'HOLDINGS') {
         const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
         const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
                                  (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        // 미래-연금 계좌이고, 사용자가 비중 토글을 눌렀을 때만 14열 와이드 리밸런싱 모드로 전환!
+        // 미래-연금 계좌이고, 사용자가 비중 토글을 눌렀을 때만 14열 와이드 리밸런싱 모드로 전환![cite: 49]
         const showWideRebalance = isPensionAccount && isRebalanceExpanded;
 
         if (title) {
@@ -65,14 +65,11 @@ function renderDataTable(viewType, dataList) {
         }
 
         if (showWideRebalance) {
-            // [1단계 확장 상태]: 14개 열 와이드 헤더 & 💡 별도 [수정] 버튼 박스를 완전히 없앤 헤더 자체 토글
+            // [1단계 확장 상태]: 14개 열 와이드 헤더 & 💡 연필/체크 아이콘 없는 순수 텍스트 토글
             const targetWeightBtnTitle = isTargetWeightEditMode ? '클릭 시 비중 저장 및 적용' : '클릭 시 목표비중 수정';
             const targetHeaderBg = isTargetWeightEditMode 
                 ? 'bg-emerald-200 text-emerald-950 font-black ring-1 ring-inset ring-emerald-500' 
                 : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900';
-            const targetHeaderIcon = isTargetWeightEditMode 
-                ? '<i class="fa-solid fa-check text-[10px] ml-1 text-emerald-700"></i>' 
-                : '<i class="fa-solid fa-pen text-[9px] ml-1 opacity-60"></i>';
             const targetHeaderText = isTargetWeightEditMode ? '목표비중(저장)' : '목표비중';
 
             thead.innerHTML = `
@@ -88,9 +85,9 @@ function renderDataTable(viewType, dataList) {
                   <th id="thToggleRebalance" title="클릭 시 기본 테이블로 축소" class="py-2 px-2.5 text-right bg-blue-100 hover:bg-blue-200 text-blue-900 border-l border-blue-200 cursor-pointer transition select-none">
                     현재비중 <i class="fa-solid fa-compress text-[10px] ml-0.5 opacity-70"></i>
                   </th>
-                  <!-- 💡 별도 수정버튼 없이 헤더 자체가 클릭형 토글로 동작하여 열 폭 최소화 -->
+                  <!-- 💡 연필/체크 아이콘 없이 목표비중 글자만 남긴 슬림형 토글 헤더 -->
                   <th id="btnToggleTargetEdit" title="${targetWeightBtnTitle}" class="py-2 px-2 text-right cursor-pointer transition select-none ${targetHeaderBg}">
-                    ${targetHeaderText} ${targetHeaderIcon}
+                    ${targetHeaderText}
                   </th>
                   <th class="py-2 px-2 text-right text-slate-500">밴드하한</th>
                   <th class="py-2 px-2 text-right text-slate-500">밴드상한</th>
@@ -100,7 +97,7 @@ function renderDataTable(viewType, dataList) {
                 </tr>
             `;
 
-            // 💡 2단계: 목표비중 헤더 자체 클릭 이벤트 바인딩
+            // 💡 2단계: 목표비중 헤더 자체 클릭 이벤트 바인딩[cite: 49]
             const btnToggleTargetEdit = thead.querySelector('#btnToggleTargetEdit');
             if (btnToggleTargetEdit) {
                 btnToggleTargetEdit.addEventListener('click', async (e) => {
@@ -118,7 +115,7 @@ function renderDataTable(viewType, dataList) {
             }
 
         } else {
-            // [기본 상태]: 모든 계좌 공통 9개 열 콤팩트 헤더 (목표비중 열 없음)
+            // [기본 상태]: 모든 계좌 공통 9개 열 콤팩트 헤더 (목표비중 열 없음)[cite: 49]
             const weightHeaderHtml = isPensionAccount 
                 ? `<th id="thToggleRebalance" title="클릭 시 자산배분 밴드리밸런싱 분석 확장" class="py-2 px-2.5 text-right bg-blue-50/80 hover:bg-blue-100 text-blue-800 cursor-pointer transition select-none">
                     비중 <i class="fa-solid fa-expand text-[10px] ml-0.5 opacity-70"></i>
@@ -140,7 +137,7 @@ function renderDataTable(viewType, dataList) {
             `;
         }
 
-        // 💡 1단계: 비중 헤더 클릭 시 리밸런싱 와이드 테이블 확장/축소 토글
+        // 💡 1단계: 비중 헤더 클릭 시 리밸런싱 와이드 테이블 확장/축소 토글[cite: 49]
         const toggleBtn = thead.querySelector('#thToggleRebalance');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', (e) => {
@@ -153,7 +150,7 @@ function renderDataTable(viewType, dataList) {
         }
 
     // ==========================================
-    // 2. 거래원장 헤더 세팅
+    // 2. 거래원장 헤더 세팅[cite: 49]
     // ==========================================
     } else {
         const titles = {
@@ -189,7 +186,7 @@ function renderDataTable(viewType, dataList) {
     updatePaginationControls();
 }
 
-// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드(하한 x0.8, 상한 x1.2)/매수매도액 재연산 함수
+// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드(하한 x0.8, 상한 x1.2)/매수매도액 재연산 함수[cite: 49]
 async function saveTargetWeightsAndRecalculate() {
     const inputs = document.querySelectorAll('.target-weight-input');
     const updates = [];
@@ -207,7 +204,7 @@ async function saveTargetWeightsAndRecalculate() {
     const activeAccount = (typeof currentAccount !== 'undefined') ? currentAccount : 'MIRAE_PENSION';
 
     try {
-        // 백엔드 /api/rebalance 호출하여 DB 일괄 업데이트
+        // 백엔드 /api/rebalance 호출하여 DB 일괄 업데이트[cite: 49]
         const res = await fetch('/api/rebalance', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -221,7 +218,7 @@ async function saveTargetWeightsAndRecalculate() {
             throw new Error(result.error || '목표비중 저장 실패');
         }
 
-        // 전체 순자산(Net Worth) 산출
+        // 전체 순자산(Net Worth) 산출[cite: 49]
         let totalNetWorth = 0;
         if (typeof cachedSummary !== 'undefined' && cachedSummary && cachedSummary.netWorth) {
             totalNetWorth = Number(cachedSummary.netWorth);
@@ -229,7 +226,7 @@ async function saveTargetWeightsAndRecalculate() {
             totalNetWorth = currentDataList.reduce((sum, item) => sum + (Number(item.eval_amount) || 0), 0);
         }
 
-        // 메모리에 로드된 종목 리스트 재계산 (💡 밴드 공식: 하한 x0.8, 상한 x1.2)
+        // 메모리에 로드된 종목 리스트 재계산 (💡 밴드 공식: 하한 x0.8, 상한 x1.2)[cite: 49]
         currentDataList.forEach(item => {
             if (updatedMap.has(item.ticker)) {
                 const newTarget = updatedMap.get(item.ticker);
@@ -288,19 +285,31 @@ function renderPaginatedRows() {
         const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
                                  (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        // 미래-연금이고 확장 토글이 켜진 경우에만 14개 열 와이드 본문 렌더링
+        // 미래-연금이고 확장 토글이 켜진 경우에만 14개 열 와이드 본문 렌더링[cite: 49]
         if (isPensionAccount && isRebalanceExpanded) {
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
                 const sign = isPositive ? '+' : '';
 
+                // 💡 밴드 상·하한을 DB의 옛날 ±2% 대신, 언제나 목표비중 x 0.8 / x 1.2로 동적 계산
+                const targetW = (item.target_weight !== null && item.target_weight !== undefined) ? Number(item.target_weight) : null;
+                const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(2)) : null;
+                const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(2)) : null;
+
+                const curWeight = Number(item.weight) || 0;
+                let calculatedStatus = '유지';
+                if (dynamicBandMin !== null && dynamicBandMax !== null) {
+                    if (curWeight < dynamicBandMin) calculatedStatus = '매수';
+                    else if (curWeight > dynamicBandMax) calculatedStatus = '매도';
+                }
+
                 let statusBadge = '<span class="text-slate-400">-</span>';
-                if (item.rebalance_status === '유지') {
+                if (calculatedStatus === '유지') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 유지</span>';
-                } else if (item.rebalance_status === '매수') {
+                } else if (calculatedStatus === '매수') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">🔵 매수</span>';
-                } else if (item.rebalance_status === '매도') {
+                } else if (calculatedStatus === '매도') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">🔴 매도</span>';
                 }
 
@@ -317,10 +326,10 @@ function renderPaginatedRows() {
                     else adjText = '0주';
                 }
 
-                // 💡 편집 모드일 때는 슬림한 인풋 박스(w-11)로 전환
+                // 💡 편집 모드일 때는 슬림한 인풋 박스(w-11)로 전환[cite: 49]
                 let targetWeightDisplay = '';
                 if (isTargetWeightEditMode) {
-                    const currentTargetVal = (item.target_weight !== null && item.target_weight !== undefined) ? item.target_weight : '';
+                    const currentTargetVal = targetW !== null ? targetW : '';
                     targetWeightDisplay = `
                         <div class="inline-flex items-center justify-end">
                           <input type="number" step="0.1" min="0" max="100" 
@@ -331,12 +340,11 @@ function renderPaginatedRows() {
                         </div>
                     `;
                 } else {
-                    targetWeightDisplay = item.target_weight !== null ? `${item.target_weight}%` : '-';
+                    targetWeightDisplay = targetW !== null ? `${targetW}%` : '-';
                 }
 
-                // 💡 밴드 표시: DB 또는 목표비중 x0.8, x1.2 기준 보정 출력
-                const calcBandMin = item.target_weight !== null ? (item.target_weight * 0.8).toFixed(2) + '%' : '-';
-                const calcBandMax = item.target_weight !== null ? (item.target_weight * 1.2).toFixed(2) + '%' : '-';
+                const displayBandMinText = dynamicBandMin !== null ? dynamicBandMin.toFixed(2) + '%' : '-';
+                const displayBandMaxText = dynamicBandMax !== null ? dynamicBandMax.toFixed(2) + '%' : '-';
 
                 return `
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
@@ -349,8 +357,8 @@ function renderPaginatedRows() {
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/40 border-l border-blue-50">${item.weight}%</td>
                       <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${targetWeightDisplay}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-500">${calcBandMin}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-500">${calcBandMax}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMinText}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMaxText}</td>
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
                       <td class="py-2 px-3 text-right font-mono font-medium text-slate-500 border-l border-slate-100">${diffText}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-500">${adjText}</td>
@@ -359,12 +367,23 @@ function renderPaginatedRows() {
             }).join('');
 
             mobileList.innerHTML = pageItems.map(item => {
+                const targetW = (item.target_weight !== null && item.target_weight !== undefined) ? Number(item.target_weight) : null;
+                const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(1)) : 0;
+                const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(1)) : 0;
+
+                const curWeight = Number(item.weight) || 0;
+                let calculatedStatus = '유지';
+                if (targetW !== null) {
+                    if (curWeight < dynamicBandMin) calculatedStatus = '매수';
+                    else if (curWeight > dynamicBandMax) calculatedStatus = '매도';
+                }
+
                 let statusBadge = '<span class="text-slate-400 text-[10px]">-</span>';
-                if (item.rebalance_status === '유지') {
+                if (calculatedStatus === '유지') {
                     statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">✅ 유지</span>';
-                } else if (item.rebalance_status === '매수') {
+                } else if (calculatedStatus === '매수') {
                     statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">🔵 매수 권장</span>';
-                } else if (item.rebalance_status === '매도') {
+                } else if (calculatedStatus === '매도') {
                     statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">🔴 매도 권장</span>';
                 }
 
@@ -380,9 +399,6 @@ function renderPaginatedRows() {
                     else if (adjShares < 0) adjText = `(-${Math.abs(adjShares).toLocaleString()}주)`;
                 }
 
-                const mobileBandMin = item.target_weight !== null ? (item.target_weight * 0.8).toFixed(1) : 0;
-                const mobileBandMax = item.target_weight !== null ? (item.target_weight * 1.2).toFixed(1) : 0;
-
                 return `
                     <div class="py-2.5 px-3 bg-white border-b border-slate-100 text-xs">
                         <div class="flex justify-between items-center mb-1.5">
@@ -394,7 +410,7 @@ function renderPaginatedRows() {
                             <span class="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">목표 ${item.target_weight || '-'}%</span>
                         </div>
                         <div class="flex justify-between items-center text-[11px] pt-1 border-t border-slate-50">
-                            <span class="text-slate-400">밴드 ${mobileBandMin}% ~ ${mobileBandMax}%</span>
+                            <span class="text-slate-400">밴드 ${dynamicBandMin}% ~ ${dynamicBandMax}%</span>
                             <span class="font-medium text-slate-500">조정 ${diffText} ${adjText}</span>
                         </div>
                     </div>
@@ -402,7 +418,7 @@ function renderPaginatedRows() {
             }).join('');
 
         } else {
-            // [기본 상태]: 9개 열 콤팩트 본문 렌더링
+            // [기본 상태]: 9개 열 콤팩트 본문 렌더링[cite: 49]
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -444,7 +460,7 @@ function renderPaginatedRows() {
         }
 
     // ==========================================
-    // 2. 거래원장 본문 세팅
+    // 2. 거래원장 본문 세팅[cite: 49]
     // ==========================================
     } else {
         tbody.innerHTML = pageItems.map(item => {

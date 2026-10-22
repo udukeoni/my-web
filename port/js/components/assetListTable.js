@@ -414,7 +414,7 @@ function renderPaginatedRows() {
                       <!-- 9. 수익률 -->
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
                       <!-- 10. 현재비중 -->
-                      <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/40 border-l border-blue-50">${item.weight}%</td>
+                      <td class="py-2 px-2.5 text-right font-mono font-bold text-slate-800 bg-slate-50/40 border-l border-slate-200/60">${item.weight}%</td>
                       <!-- 보조 1. 목표비중 -->
                       <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${targetWeightDisplay}</td>
                       <!-- 보조 2. 밴드하한 -->
@@ -511,7 +511,7 @@ function renderPaginatedRows() {
                       <!-- 9. 수익률 -->
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
                       <!-- 10. 비중 -->
-                      <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/30">${item.weight}%</td>
+                      <td class="py-2 px-2.5 text-right font-mono font-bold text-slate-800">${item.weight}%</td>
                     </tr>
                 `;
             }).join('');
@@ -525,7 +525,7 @@ function renderPaginatedRows() {
                     <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs">
                         <div class="flex justify-between items-center mb-1">
                             <div class="font-bold text-slate-900 truncate max-w-[190px]">${item.asset_name}</div>
-                            <div class="font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">${item.weight}%</div>
+                            <div class="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">${item.weight}%</div>
                         </div>
                         <div class="flex justify-between items-center text-[11px] text-slate-600">
                             <span>매입 ₩${Number(item.buy_amount || 0).toLocaleString()} · 평가 ₩${Number(item.eval_amount).toLocaleString()} (${Number(item.quantity).toLocaleString()}주)</span>

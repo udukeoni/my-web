@@ -1,5 +1,5 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10개 필드 재배치: 종목명, 코드, 매입금액, 평균단가, 수량, 현재가, 평가금액, 평가손익, 수익률, 비중)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 + 모바일 카드 2중 인터랙션 토글 (매입/평가 ↔ 단가/현재가/수량, 수익률 ↔ 수익금)
 
 const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
@@ -8,10 +8,14 @@ let pageSize = 10;
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
-// 💡 1단계: 미래-연금 밴드리밸런싱 확장 토글 상태 플래그 (기본값: false = 축소된 일반 10열 뷰)
+// 💡 미래-연금 밴드리밸런싱 확장 토글 상태 플래그
 let isRebalanceExpanded = false;
-// 💡 2단계: 목표비중 편집 모드 상태 플래그
+// 💡 목표비중 편집 모드 상태 플래그
 let isTargetWeightEditMode = false;
+
+// 💡 모바일 카드 토글 상태 관리 (종목별 고유 키: ticker)
+const mobilePriceViewToggle = new Map(); // false/undefined: 매입/평가, true: 단가/현재가(수량)
+const mobileProfitViewToggle = new Map(); // false/undefined: 수익률, true: 수익금
 
 // 💡 목표비중 입력값 전체 합산 계산 헬퍼 함수
 function calculateTotalTargetWeight() {
@@ -99,7 +103,6 @@ function renderDataTable(viewType, dataList) {
         }
 
         if (showWideRebalance) {
-            // [리밸런싱 확장 상태]: 10대 기본 필드 순서 유지 + 밴드리밸런싱 5대 보조 열
             const initialTotal = calculateTotalTargetWeight();
             const targetWeightBtnTitle = isTargetWeightEditMode ? `합계: ${initialTotal}% (클릭 시 비중 저장 및 적용)` : '클릭 시 목표비중 수정';
             
@@ -126,11 +129,9 @@ function renderDataTable(viewType, dataList) {
                   <th class="py-2 px-3 text-right bg-slate-200/50">평가금액</th>
                   <th class="py-2 px-3 text-right">평가손익</th>
                   <th class="py-2 px-2.5 text-right">수익률</th>
-                  <!-- 현재비중 클릭 시 축소 토글 -->
                   <th id="thToggleRebalance" title="클릭 시 기본 테이블로 축소" class="py-2 px-2.5 text-right bg-blue-100 hover:bg-blue-200 text-blue-900 border-l border-blue-200 cursor-pointer transition select-none">
                     현재비중 <i class="fa-solid fa-compress text-[10px] ml-0.5 opacity-70"></i>
                   </th>
-                  <!-- 목표비중 실시간 합계 버튼 -->
                   <th id="btnToggleTargetEdit" title="${targetWeightBtnTitle}" class="py-2 px-2 text-right cursor-pointer transition select-none ${targetHeaderBg}">
                     ${targetHeaderText}
                   </th>
@@ -156,8 +157,6 @@ function renderDataTable(viewType, dataList) {
             }
 
         } else {
-            // [기본 상태]: 사용자가 지정한 10개 필드 완벽 정렬
-            // 종목명, 코드, 매입금액, 평균단가, 수량, 현재가, 평가금액, 평가손익, 수익률, 비중
             const weightHeaderHtml = isPensionAccount 
                 ? `<th id="thToggleRebalance" title="클릭 시 자산배분 밴드리밸런싱 분석 확장" class="py-2 px-2.5 text-right bg-blue-50/80 hover:bg-blue-100 text-blue-800 cursor-pointer transition select-none">
                     비중 <i class="fa-solid fa-expand text-[10px] ml-0.5 opacity-70"></i>
@@ -180,7 +179,6 @@ function renderDataTable(viewType, dataList) {
             `;
         }
 
-        // 비중 헤더 클릭 시 리밸런싱 와이드 테이블 확장/축소 토글
         const toggleBtn = thead.querySelector('#thToggleRebalance');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', (e) => {
@@ -238,7 +236,7 @@ function renderDataTable(viewType, dataList) {
     }
 }
 
-// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드/조정액 재연산 함수
+// 💡 목표비중 저장 및 D1 DB 반영 함수
 async function saveTargetWeightsAndRecalculate() {
     const inputs = document.querySelectorAll('.target-weight-input');
     const updates = [];
@@ -334,7 +332,7 @@ function renderPaginatedRows() {
         const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
                                  (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        // 미래-연금이고 확장 토글이 켜진 경우에만 리밸런싱 확장 본문 렌더링
+        // 미래-연금이고 확장 토글이 켜진 경우에만 와이드 본문 렌더링
         if (isPensionAccount && isRebalanceExpanded) {
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
@@ -395,42 +393,27 @@ function renderPaginatedRows() {
 
                 return `
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
-                      <!-- 1. 종목명 -->
                       <td class="py-2 px-3 font-semibold text-slate-900">${item.asset_name}</td>
-                      <!-- 2. 코드 -->
                       <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">${item.ticker}</td>
-                      <!-- 3. 매입금액 -->
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600 bg-slate-50/50">₩${Number(item.buy_amount || 0).toLocaleString()}</td>
-                      <!-- 4. 평균단가 -->
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Math.round(Number(item.avg_buy_price || 0)).toLocaleString()}</td>
-                      <!-- 5. 수량 -->
                       <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
-                      <!-- 6. 현재가 -->
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
-                      <!-- 7. 평가금액 -->
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/70">₩${Number(item.eval_amount).toLocaleString()}</td>
-                      <!-- 8. 평가손익 -->
                       <td class="py-2 px-3 text-right font-mono font-semibold ${profitColor}">${item.isCash ? '₩0' : `${sign}₩${Number(item.profit_amount).toLocaleString()}`}</td>
-                      <!-- 9. 수익률 -->
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
-                      <!-- 10. 현재비중 -->
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-slate-800 bg-slate-50/40 border-l border-slate-200/60">${item.weight}%</td>
-                      <!-- 보조 1. 목표비중 -->
                       <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${targetWeightDisplay}</td>
-                      <!-- 보조 2. 밴드하한 -->
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMinText}</td>
-                      <!-- 보조 3. 밴드상한 -->
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMaxText}</td>
-                      <!-- 보조 4. 상태 확인 -->
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
-                      <!-- 보조 5. 매수/매도액 -->
                       <td class="py-2 px-3 text-right font-mono font-medium text-slate-500 border-l border-slate-100">${diffText}</td>
-                      <!-- 보조 6. 조정 주식 수 -->
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-500">${adjText}</td>
                     </tr>
                 `;
             }).join('');
 
+            // [모바일 카드 뷰 - 리밸런싱 모드]
             mobileList.innerHTML = pageItems.map(item => {
                 const targetW = (item.target_weight !== null && item.target_weight !== undefined) ? Number(item.target_weight) : null;
                 const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(1)) : 0;
@@ -484,7 +467,6 @@ function renderPaginatedRows() {
 
         } else {
             // [기본 상태]: 10개 열 순서 정렬 본문 렌더링
-            // 종목명, 코드, 매입금액, 평균단가, 수량, 현재가, 평가금액, 평가손익, 수익률, 비중
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -492,48 +474,97 @@ function renderPaginatedRows() {
 
                 return `
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
-                      <!-- 1. 종목명 -->
                       <td class="py-2 px-3 font-semibold text-slate-900">${item.asset_name}</td>
-                      <!-- 2. 코드 -->
                       <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">${item.ticker}</td>
-                      <!-- 3. 매입금액 -->
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600 bg-slate-50/40">₩${Number(item.buy_amount || 0).toLocaleString()}</td>
-                      <!-- 4. 평균단가 -->
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Math.round(Number(item.avg_buy_price || 0)).toLocaleString()}</td>
-                      <!-- 5. 수량 -->
                       <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
-                      <!-- 6. 현재가 -->
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
-                      <!-- 7. 평가금액 -->
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/60">₩${Number(item.eval_amount).toLocaleString()}</td>
-                      <!-- 8. 평가손익 -->
                       <td class="py-2 px-3 text-right font-mono font-semibold ${profitColor}">${item.isCash ? '₩0' : `${sign}₩${Number(item.profit_amount).toLocaleString()}`}</td>
-                      <!-- 9. 수익률 -->
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
-                      <!-- 10. 비중 -->
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-slate-800">${item.weight}%</td>
                     </tr>
                 `;
             }).join('');
 
+            // 💡 [모바일 카드 뷰 - 인터랙션 토글 완벽 적용]
             mobileList.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
                 const sign = isPositive ? '+' : '';
 
+                // A. 매입/평가 ↔ 단가/현재가(수량) 토글 렌더링
+                const isPriceToggled = mobilePriceViewToggle.get(item.ticker) === true;
+                let priceHtml = '';
+                if (!isPriceToggled) {
+                    // 1번 요청: 수량 빼고 매입~~평가~~만 깔끔하게 표시
+                    priceHtml = `<span>매입 ₩${Number(item.buy_amount || 0).toLocaleString()} · 평가 ₩${Number(item.eval_amount).toLocaleString()}</span>`;
+                } else {
+                    // 3번 요청: 평균단가, 현재가, 수량(괄호) 표시
+                    const avgPriceStr = Math.round(Number(item.avg_buy_price || 0)).toLocaleString();
+                    const curPriceStr = Number(item.current_price).toLocaleString();
+                    const qtyStr = item.isCash ? '1주' : `${Number(item.quantity).toLocaleString()}주`;
+                    priceHtml = `<span>평균단가: ₩${avgPriceStr} · 현재가: ₩${curPriceStr} (${qtyStr})</span>`;
+                }
+
+                // B. 수익률 ↔ 수익금 토글 렌더링
+                const isProfitToggled = mobileProfitViewToggle.get(item.ticker) === true;
+                let profitHtml = '';
+                if (item.isCash) {
+                    profitHtml = `<span class="font-bold ${profitColor}">+0%</span>`;
+                } else if (!isProfitToggled) {
+                    // 기본: 수익률
+                    profitHtml = `<span class="font-bold ${profitColor}">${sign}${item.profit_rate}%</span>`;
+                } else {
+                    // 토글: 수익금
+                    profitHtml = `<span class="font-bold ${profitColor}">${sign}₩${Number(item.profit_amount).toLocaleString()}</span>`;
+                }
+
                 return `
-                    <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs">
+                    <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs select-none">
+                        <!-- 상단: 종목명 및 비중 (비중은 회색빛 박스 유지) -->
                         <div class="flex justify-between items-center mb-1">
                             <div class="font-bold text-slate-900 truncate max-w-[190px]">${item.asset_name}</div>
                             <div class="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">${item.weight}%</div>
                         </div>
+                        <!-- 하단: 토글형 매입/평가 & 토글형 수익률/손익금 -->
                         <div class="flex justify-between items-center text-[11px] text-slate-600">
-                            <span>매입 ₩${Number(item.buy_amount || 0).toLocaleString()} · 평가 ₩${Number(item.eval_amount).toLocaleString()} (${Number(item.quantity).toLocaleString()}주)</span>
-                            <span class="font-bold ${profitColor}">${sign}${item.profit_rate}%</span>
+                            <!-- 2번 요청: 매입/평가 영역 버튼화 (기존 디자인 유지) -->
+                            <div class="mobile-price-toggle-btn cursor-pointer py-0.5 active:opacity-60 transition" data-ticker="${item.ticker}">
+                                ${priceHtml}
+                            </div>
+                            <!-- 5번 요청: 수익률/수익금 영역 버튼화 -->
+                            <div class="mobile-profit-toggle-btn cursor-pointer py-0.5 active:opacity-60 transition" data-ticker="${item.ticker}">
+                                ${profitHtml}
+                            </div>
                         </div>
                     </div>
                 `;
             }).join('');
+
+            // 💡 모바일 카드 이벤트 바인딩
+            const priceBtns = mobileList.querySelectorAll('.mobile-price-toggle-btn');
+            priceBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const ticker = btn.dataset.ticker;
+                    const curState = mobilePriceViewToggle.get(ticker) || false;
+                    mobilePriceViewToggle.set(ticker, !curState);
+                    renderPaginatedRows(); // 화면 즉시 재렌더링
+                });
+            });
+
+            const profitBtns = mobileList.querySelectorAll('.mobile-profit-toggle-btn');
+            profitBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const ticker = btn.dataset.ticker;
+                    const curState = mobileProfitViewToggle.get(ticker) || false;
+                    mobileProfitViewToggle.set(ticker, !curState);
+                    renderPaginatedRows(); // 화면 즉시 재렌더링
+                });
+            });
         }
 
     // ==========================================

@@ -1,17 +1,55 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (목표비중 헤더 순수 텍스트 토글 + 밴드 공식 x0.8, x1.2 실시간 연동)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (목표비중 헤더 실시간 합계 동적 표시 + 밴드 공식 x0.8, x1.2 실시간 연동)
 
-const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용[cite: 49]
+const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
 let currentPage = 1;
 let pageSize = 10;
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
-// 💡 1단계: 미래-연금 밴드리밸런싱 확장 토글 상태 플래그 (기본값: false = 축소된 일반 9열 뷰)[cite: 49]
+// 💡 1단계: 미래-연금 밴드리밸런싱 확장 토글 상태 플래그 (기본값: false = 축소된 일반 9열 뷰)
 let isRebalanceExpanded = false;
-// 💡 2단계: 목표비중 편집 모드 상태 플래그[cite: 49]
+// 💡 2단계: 목표비중 편집 모드 상태 플래그
 let isTargetWeightEditMode = false;
+
+// 💡 목표비중 입력값 전체 합산 계산 헬퍼 함수
+function calculateTotalTargetWeight() {
+    const inputs = document.querySelectorAll('.target-weight-input');
+    let total = 0;
+    if (inputs.length > 0) {
+        inputs.forEach(inp => {
+            const val = parseFloat(inp.value);
+            if (!isNaN(val)) total += val;
+        });
+    } else {
+        // 인풋창이 렌더링되기 전에는 현재 로드된 데이터 리스트의 목표비중을 합산
+        currentDataList.forEach(item => {
+            const val = parseFloat(item.target_weight);
+            if (!isNaN(val)) total += val;
+        });
+    }
+    // 소수점 오차 방지 (소수 첫째 자리 정리 후 불필요한 .0 제거)
+    return parseFloat(total.toFixed(1));
+}
+
+// 💡 헤더의 목표비중 합계 텍스트 및 시각 상태 실시간 갱신 함수
+function updateTargetHeaderLiveSum() {
+    const btn = document.getElementById('btnToggleTargetEdit');
+    if (!btn || !isTargetWeightEditMode) return;
+
+    const total = calculateTotalTargetWeight();
+    btn.textContent = `목표비중(${total})`;
+
+    // 정확히 100%일 때는 안정적인 에메랄드, 100%가 아닐 때는 비중 조절 필요 경고(주황색)
+    if (Math.abs(total - 100) < 0.05) {
+        btn.className = 'py-2 px-2 text-right cursor-pointer transition select-none bg-emerald-200 text-emerald-950 font-black ring-1 ring-inset ring-emerald-500';
+        btn.title = `합계: ${total}% (클릭 시 비중 저장 및 적용)`;
+    } else {
+        btn.className = 'py-2 px-2 text-right cursor-pointer transition select-none bg-amber-200 text-amber-950 font-black ring-1 ring-inset ring-amber-500';
+        btn.title = `현재 합계: ${total}% (100%에 맞춰 조절 후 클릭하여 저장)`;
+    }
+}
 
 function renderDataTable(viewType, dataList) {
     const thead = document.getElementById('tableHead');
@@ -31,7 +69,7 @@ function renderDataTable(viewType, dataList) {
     pageSize = 10;
     currentDataList = dataList || [];
 
-    // 거래내역 입력 버튼 제어[cite: 49]
+    // 거래내역 입력 버튼 제어
     const headerContainer = title ? title.closest('.flex.items-center.justify-between') : null;
     let btnOpenModal = document.getElementById('btnOpenTxModal');
     if (headerContainer && !btnOpenModal) {
@@ -44,14 +82,14 @@ function renderDataTable(viewType, dataList) {
     }
 
     // ==========================================
-    // 1. 보유 종목 (HOLDINGS) 헤더 세팅[cite: 49]
+    // 1. 보유 종목 (HOLDINGS) 헤더 세팅
     // ==========================================
     if (viewType === 'HOLDINGS') {
         const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
         const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
                                  (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        // 미래-연금 계좌이고, 사용자가 비중 토글을 눌렀을 때만 14열 와이드 리밸런싱 모드로 전환![cite: 49]
+        // 미래-연금 계좌이고, 사용자가 비중 토글을 눌렀을 때만 14열 와이드 리밸런싱 모드로 전환!
         const showWideRebalance = isPensionAccount && isRebalanceExpanded;
 
         if (title) {
@@ -65,12 +103,21 @@ function renderDataTable(viewType, dataList) {
         }
 
         if (showWideRebalance) {
-            // [1단계 확장 상태]: 14개 열 와이드 헤더 & 💡 연필/체크 아이콘 없는 순수 텍스트 토글
-            const targetWeightBtnTitle = isTargetWeightEditMode ? '클릭 시 비중 저장 및 적용' : '클릭 시 목표비중 수정';
-            const targetHeaderBg = isTargetWeightEditMode 
-                ? 'bg-emerald-200 text-emerald-950 font-black ring-1 ring-inset ring-emerald-500' 
-                : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900';
-            const targetHeaderText = isTargetWeightEditMode ? '목표비중(저장)' : '목표비중';
+            // [1단계 확장 상태]: 14개 열 와이드 헤더 & 실시간 합계 동적 표기
+            const initialTotal = calculateTotalTargetWeight();
+            const targetWeightBtnTitle = isTargetWeightEditMode ? `합계: ${initialTotal}% (클릭 시 비중 저장 및 적용)` : '클릭 시 목표비중 수정';
+            
+            let targetHeaderBg = 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900';
+            let targetHeaderText = '목표비중';
+
+            if (isTargetWeightEditMode) {
+                targetHeaderText = `목표비중(${initialTotal})`;
+                if (Math.abs(initialTotal - 100) < 0.05) {
+                    targetHeaderBg = 'bg-emerald-200 text-emerald-950 font-black ring-1 ring-inset ring-emerald-500';
+                } else {
+                    targetHeaderBg = 'bg-amber-200 text-amber-950 font-black ring-1 ring-inset ring-amber-500';
+                }
+            }
 
             thead.innerHTML = `
                 <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
@@ -85,7 +132,7 @@ function renderDataTable(viewType, dataList) {
                   <th id="thToggleRebalance" title="클릭 시 기본 테이블로 축소" class="py-2 px-2.5 text-right bg-blue-100 hover:bg-blue-200 text-blue-900 border-l border-blue-200 cursor-pointer transition select-none">
                     현재비중 <i class="fa-solid fa-compress text-[10px] ml-0.5 opacity-70"></i>
                   </th>
-                  <!-- 💡 연필/체크 아이콘 없이 목표비중 글자만 남긴 슬림형 토글 헤더 -->
+                  <!-- 💡 실시간 합산 숫자가 표시되는 목표비중 헤더 버튼 -->
                   <th id="btnToggleTargetEdit" title="${targetWeightBtnTitle}" class="py-2 px-2 text-right cursor-pointer transition select-none ${targetHeaderBg}">
                     ${targetHeaderText}
                   </th>
@@ -97,7 +144,7 @@ function renderDataTable(viewType, dataList) {
                 </tr>
             `;
 
-            // 💡 2단계: 목표비중 헤더 자체 클릭 이벤트 바인딩[cite: 49]
+            // 💡 2단계: 목표비중 헤더 자체 클릭 이벤트 바인딩
             const btnToggleTargetEdit = thead.querySelector('#btnToggleTargetEdit');
             if (btnToggleTargetEdit) {
                 btnToggleTargetEdit.addEventListener('click', async (e) => {
@@ -115,7 +162,7 @@ function renderDataTable(viewType, dataList) {
             }
 
         } else {
-            // [기본 상태]: 모든 계좌 공통 9개 열 콤팩트 헤더 (목표비중 열 없음)[cite: 49]
+            // [기본 상태]: 모든 계좌 공통 9개 열 콤팩트 헤더
             const weightHeaderHtml = isPensionAccount 
                 ? `<th id="thToggleRebalance" title="클릭 시 자산배분 밴드리밸런싱 분석 확장" class="py-2 px-2.5 text-right bg-blue-50/80 hover:bg-blue-100 text-blue-800 cursor-pointer transition select-none">
                     비중 <i class="fa-solid fa-expand text-[10px] ml-0.5 opacity-70"></i>
@@ -137,20 +184,19 @@ function renderDataTable(viewType, dataList) {
             `;
         }
 
-        // 💡 1단계: 비중 헤더 클릭 시 리밸런싱 와이드 테이블 확장/축소 토글[cite: 49]
+        // 💡 1단계: 비중 헤더 클릭 시 리밸런싱 와이드 테이블 확장/축소 토글
         const toggleBtn = thead.querySelector('#thToggleRebalance');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 isRebalanceExpanded = !isRebalanceExpanded;
-                // 축소될 때는 편집 모드도 함께 안전하게 해제
                 if (!isRebalanceExpanded) isTargetWeightEditMode = false;
                 renderDataTable('HOLDINGS', currentDataList);
             });
         }
 
     // ==========================================
-    // 2. 거래원장 헤더 세팅[cite: 49]
+    // 2. 거래원장 헤더 세팅
     // ==========================================
     } else {
         const titles = {
@@ -184,9 +230,20 @@ function renderDataTable(viewType, dataList) {
 
     renderPaginatedRows();
     updatePaginationControls();
+
+    // 💡 편집 모드일 때 인풋 이벤트 바인딩 (입력할 때마다 즉시 실시간 헤더 합계 갱신)
+    if (isTargetWeightEditMode) {
+        const inputs = tbody.querySelectorAll('.target-weight-input');
+        inputs.forEach(inp => {
+            inp.addEventListener('input', () => {
+                updateTargetHeaderLiveSum();
+            });
+        });
+        updateTargetHeaderLiveSum();
+    }
 }
 
-// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드(하한 x0.8, 상한 x1.2)/매수매도액 재연산 함수[cite: 49]
+// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드(하한 x0.8, 상한 x1.2)/매수매도액 재연산 함수
 async function saveTargetWeightsAndRecalculate() {
     const inputs = document.querySelectorAll('.target-weight-input');
     const updates = [];
@@ -204,7 +261,7 @@ async function saveTargetWeightsAndRecalculate() {
     const activeAccount = (typeof currentAccount !== 'undefined') ? currentAccount : 'MIRAE_PENSION';
 
     try {
-        // 백엔드 /api/rebalance 호출하여 DB 일괄 업데이트[cite: 49]
+        // 백엔드 /api/rebalance 호출하여 DB 일괄 업데이트
         const res = await fetch('/api/rebalance', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -218,7 +275,7 @@ async function saveTargetWeightsAndRecalculate() {
             throw new Error(result.error || '목표비중 저장 실패');
         }
 
-        // 전체 순자산(Net Worth) 산출[cite: 49]
+        // 전체 순자산(Net Worth) 산출
         let totalNetWorth = 0;
         if (typeof cachedSummary !== 'undefined' && cachedSummary && cachedSummary.netWorth) {
             totalNetWorth = Number(cachedSummary.netWorth);
@@ -226,7 +283,7 @@ async function saveTargetWeightsAndRecalculate() {
             totalNetWorth = currentDataList.reduce((sum, item) => sum + (Number(item.eval_amount) || 0), 0);
         }
 
-        // 메모리에 로드된 종목 리스트 재계산 (💡 밴드 공식: 하한 x0.8, 상한 x1.2)[cite: 49]
+        // 메모리에 로드된 종목 리스트 재계산 (💡 밴드 공식: 하한 x0.8, 상한 x1.2)
         currentDataList.forEach(item => {
             if (updatedMap.has(item.ticker)) {
                 const newTarget = updatedMap.get(item.ticker);
@@ -285,14 +342,14 @@ function renderPaginatedRows() {
         const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
                                  (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        // 미래-연금이고 확장 토글이 켜진 경우에만 14개 열 와이드 본문 렌더링[cite: 49]
+        // 미래-연금이고 확장 토글이 켜진 경우에만 14개 열 와이드 본문 렌더링
         if (isPensionAccount && isRebalanceExpanded) {
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
                 const sign = isPositive ? '+' : '';
 
-                // 💡 밴드 상·하한을 DB의 옛날 ±2% 대신, 언제나 목표비중 x 0.8 / x 1.2로 동적 계산
+                // 💡 밴드 상·하한을 목표비중 x 0.8 / x 1.2로 동적 계산
                 const targetW = (item.target_weight !== null && item.target_weight !== undefined) ? Number(item.target_weight) : null;
                 const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(2)) : null;
                 const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(2)) : null;
@@ -326,7 +383,7 @@ function renderPaginatedRows() {
                     else adjText = '0주';
                 }
 
-                // 💡 편집 모드일 때는 슬림한 인풋 박스(w-11)로 전환[cite: 49]
+                // 💡 편집 모드일 때는 슬림한 인풋 박스(w-11)로 전환
                 let targetWeightDisplay = '';
                 if (isTargetWeightEditMode) {
                     const currentTargetVal = targetW !== null ? targetW : '';
@@ -418,7 +475,7 @@ function renderPaginatedRows() {
             }).join('');
 
         } else {
-            // [기본 상태]: 9개 열 콤팩트 본문 렌더링[cite: 49]
+            // [기본 상태]: 9개 열 콤팩트 본문 렌더링
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -460,7 +517,7 @@ function renderPaginatedRows() {
         }
 
     // ==========================================
-    // 2. 거래원장 본문 세팅[cite: 49]
+    // 2. 거래원장 본문 세팅
     // ==========================================
     } else {
         tbody.innerHTML = pageItems.map(item => {

@@ -1,5 +1,5 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (목표비중 헤더 실시간 합계 동적 표시 + 밴드 공식 x0.8, x1.2 실시간 연동)
+// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 (10개 필드 재배치: 종목명, 코드, 매입금액, 평균단가, 수량, 현재가, 평가금액, 평가손익, 수익률, 비중)
 
 const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
@@ -8,7 +8,7 @@ let pageSize = 10;
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
-// 💡 1단계: 미래-연금 밴드리밸런싱 확장 토글 상태 플래그 (기본값: false = 축소된 일반 9열 뷰)
+// 💡 1단계: 미래-연금 밴드리밸런싱 확장 토글 상태 플래그 (기본값: false = 축소된 일반 10열 뷰)
 let isRebalanceExpanded = false;
 // 💡 2단계: 목표비중 편집 모드 상태 플래그
 let isTargetWeightEditMode = false;
@@ -23,13 +23,11 @@ function calculateTotalTargetWeight() {
             if (!isNaN(val)) total += val;
         });
     } else {
-        // 인풋창이 렌더링되기 전에는 현재 로드된 데이터 리스트의 목표비중을 합산
         currentDataList.forEach(item => {
             const val = parseFloat(item.target_weight);
             if (!isNaN(val)) total += val;
         });
     }
-    // 소수점 오차 방지 (소수 첫째 자리 정리 후 불필요한 .0 제거)
     return parseFloat(total.toFixed(1));
 }
 
@@ -41,7 +39,6 @@ function updateTargetHeaderLiveSum() {
     const total = calculateTotalTargetWeight();
     btn.textContent = `목표비중(${total})`;
 
-    // 정확히 100%일 때는 안정적인 에메랄드, 100%가 아닐 때는 비중 조절 필요 경고(주황색)
     if (Math.abs(total - 100) < 0.05) {
         btn.className = 'py-2 px-2 text-right cursor-pointer transition select-none bg-emerald-200 text-emerald-950 font-black ring-1 ring-inset ring-emerald-500';
         btn.title = `합계: ${total}% (클릭 시 비중 저장 및 적용)`;
@@ -89,7 +86,6 @@ function renderDataTable(viewType, dataList) {
         const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
                                  (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        // 미래-연금 계좌이고, 사용자가 비중 토글을 눌렀을 때만 14열 와이드 리밸런싱 모드로 전환!
         const showWideRebalance = isPensionAccount && isRebalanceExpanded;
 
         if (title) {
@@ -103,7 +99,7 @@ function renderDataTable(viewType, dataList) {
         }
 
         if (showWideRebalance) {
-            // [1단계 확장 상태]: 14개 열 와이드 헤더 & 실시간 합계 동적 표기
+            // [리밸런싱 확장 상태]: 10대 기본 필드 순서 유지 + 밴드리밸런싱 5대 보조 열
             const initialTotal = calculateTotalTargetWeight();
             const targetWeightBtnTitle = isTargetWeightEditMode ? `합계: ${initialTotal}% (클릭 시 비중 저장 및 적용)` : '클릭 시 목표비중 수정';
             
@@ -123,16 +119,18 @@ function renderDataTable(viewType, dataList) {
                 <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
                   <th class="py-2 px-3 text-left">종목명</th>
                   <th class="py-2 px-2 text-center">코드</th>
+                  <th class="py-2 px-2.5 text-right bg-slate-200/40">매입금액</th>
+                  <th class="py-2 px-2.5 text-right">평균단가</th>
                   <th class="py-2 px-2 text-right">수량</th>
-                  <th class="py-2 px-2.5 text-right">매수평균가</th>
                   <th class="py-2 px-2.5 text-right">현재가</th>
                   <th class="py-2 px-3 text-right bg-slate-200/50">평가금액</th>
-                  <th class="py-2 px-2.5 text-right">손익률</th>
+                  <th class="py-2 px-3 text-right">평가손익</th>
+                  <th class="py-2 px-2.5 text-right">수익률</th>
                   <!-- 현재비중 클릭 시 축소 토글 -->
                   <th id="thToggleRebalance" title="클릭 시 기본 테이블로 축소" class="py-2 px-2.5 text-right bg-blue-100 hover:bg-blue-200 text-blue-900 border-l border-blue-200 cursor-pointer transition select-none">
                     현재비중 <i class="fa-solid fa-compress text-[10px] ml-0.5 opacity-70"></i>
                   </th>
-                  <!-- 💡 실시간 합산 숫자가 표시되는 목표비중 헤더 버튼 -->
+                  <!-- 목표비중 실시간 합계 버튼 -->
                   <th id="btnToggleTargetEdit" title="${targetWeightBtnTitle}" class="py-2 px-2 text-right cursor-pointer transition select-none ${targetHeaderBg}">
                     ${targetHeaderText}
                   </th>
@@ -144,25 +142,22 @@ function renderDataTable(viewType, dataList) {
                 </tr>
             `;
 
-            // 💡 2단계: 목표비중 헤더 자체 클릭 이벤트 바인딩
             const btnToggleTargetEdit = thead.querySelector('#btnToggleTargetEdit');
             if (btnToggleTargetEdit) {
                 btnToggleTargetEdit.addEventListener('click', async (e) => {
                     e.stopPropagation();
-
                     if (!isTargetWeightEditMode) {
-                        // 수정 모드 시작 (인풋 박스 활성화)
                         isTargetWeightEditMode = true;
                         renderDataTable('HOLDINGS', currentDataList);
                     } else {
-                        // 수정 모드 종료 및 저장 (D1 DB 반영 및 실시간 재계산)
                         await saveTargetWeightsAndRecalculate();
                     }
                 });
             }
 
         } else {
-            // [기본 상태]: 모든 계좌 공통 9개 열 콤팩트 헤더
+            // [기본 상태]: 사용자가 지정한 10개 필드 완벽 정렬
+            // 종목명, 코드, 매입금액, 평균단가, 수량, 현재가, 평가금액, 평가손익, 수익률, 비중
             const weightHeaderHtml = isPensionAccount 
                 ? `<th id="thToggleRebalance" title="클릭 시 자산배분 밴드리밸런싱 분석 확장" class="py-2 px-2.5 text-right bg-blue-50/80 hover:bg-blue-100 text-blue-800 cursor-pointer transition select-none">
                     비중 <i class="fa-solid fa-expand text-[10px] ml-0.5 opacity-70"></i>
@@ -173,18 +168,19 @@ function renderDataTable(viewType, dataList) {
                 <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
                   <th class="py-2 px-3 text-left">종목명</th>
                   <th class="py-2 px-2 text-center">코드</th>
-                  <th class="py-2 px-2.5 text-right">매수평균가</th>
+                  <th class="py-2 px-2.5 text-right bg-slate-200/40">매입금액</th>
+                  <th class="py-2 px-2.5 text-right">평균단가</th>
+                  <th class="py-2 px-2 text-right">수량</th>
                   <th class="py-2 px-2.5 text-right">현재가</th>
-                  <th class="py-2 px-2.5 text-right">수량</th>
                   <th class="py-2 px-3 text-right bg-slate-200/50">평가금액</th>
-                  ${weightHeaderHtml}
                   <th class="py-2 px-3 text-right">평가손익</th>
                   <th class="py-2 px-2.5 text-right">수익률</th>
+                  ${weightHeaderHtml}
                 </tr>
             `;
         }
 
-        // 💡 1단계: 비중 헤더 클릭 시 리밸런싱 와이드 테이블 확장/축소 토글
+        // 비중 헤더 클릭 시 리밸런싱 와이드 테이블 확장/축소 토글
         const toggleBtn = thead.querySelector('#thToggleRebalance');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', (e) => {
@@ -231,7 +227,6 @@ function renderDataTable(viewType, dataList) {
     renderPaginatedRows();
     updatePaginationControls();
 
-    // 💡 편집 모드일 때 인풋 이벤트 바인딩 (입력할 때마다 즉시 실시간 헤더 합계 갱신)
     if (isTargetWeightEditMode) {
         const inputs = tbody.querySelectorAll('.target-weight-input');
         inputs.forEach(inp => {
@@ -243,7 +238,7 @@ function renderDataTable(viewType, dataList) {
     }
 }
 
-// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드(하한 x0.8, 상한 x1.2)/매수매도액 재연산 함수
+// 💡 목표비중 저장 및 D1 DB 반영 & 실시간 밴드/조정액 재연산 함수
 async function saveTargetWeightsAndRecalculate() {
     const inputs = document.querySelectorAll('.target-weight-input');
     const updates = [];
@@ -261,7 +256,6 @@ async function saveTargetWeightsAndRecalculate() {
     const activeAccount = (typeof currentAccount !== 'undefined') ? currentAccount : 'MIRAE_PENSION';
 
     try {
-        // 백엔드 /api/rebalance 호출하여 DB 일괄 업데이트
         const res = await fetch('/api/rebalance', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -275,7 +269,6 @@ async function saveTargetWeightsAndRecalculate() {
             throw new Error(result.error || '목표비중 저장 실패');
         }
 
-        // 전체 순자산(Net Worth) 산출
         let totalNetWorth = 0;
         if (typeof cachedSummary !== 'undefined' && cachedSummary && cachedSummary.netWorth) {
             totalNetWorth = Number(cachedSummary.netWorth);
@@ -283,7 +276,6 @@ async function saveTargetWeightsAndRecalculate() {
             totalNetWorth = currentDataList.reduce((sum, item) => sum + (Number(item.eval_amount) || 0), 0);
         }
 
-        // 메모리에 로드된 종목 리스트 재계산 (💡 밴드 공식: 하한 x0.8, 상한 x1.2)
         currentDataList.forEach(item => {
             if (updatedMap.has(item.ticker)) {
                 const newTarget = updatedMap.get(item.ticker);
@@ -326,7 +318,7 @@ function renderPaginatedRows() {
     if (!tbody || !mobileList) return;
 
     if (!currentDataList || currentDataList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="14" class="py-8 text-center text-slate-400 text-xs">데이터가 없습니다.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="16" class="py-8 text-center text-slate-400 text-xs">데이터가 없습니다.</td></tr>`;
         mobileList.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs">데이터가 없습니다.</div>`;
         return;
     }
@@ -342,14 +334,13 @@ function renderPaginatedRows() {
         const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
                                  (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
 
-        // 미래-연금이고 확장 토글이 켜진 경우에만 14개 열 와이드 본문 렌더링
+        // 미래-연금이고 확장 토글이 켜진 경우에만 리밸런싱 확장 본문 렌더링
         if (isPensionAccount && isRebalanceExpanded) {
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
                 const sign = isPositive ? '+' : '';
 
-                // 💡 밴드 상·하한을 목표비중 x 0.8 / x 1.2로 동적 계산
                 const targetW = (item.target_weight !== null && item.target_weight !== undefined) ? Number(item.target_weight) : null;
                 const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(2)) : null;
                 const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(2)) : null;
@@ -383,7 +374,6 @@ function renderPaginatedRows() {
                     else adjText = '0주';
                 }
 
-                // 💡 편집 모드일 때는 슬림한 인풋 박스(w-11)로 전환
                 let targetWeightDisplay = '';
                 if (isTargetWeightEditMode) {
                     const currentTargetVal = targetW !== null ? targetW : '';
@@ -405,19 +395,37 @@ function renderPaginatedRows() {
 
                 return `
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
+                      <!-- 1. 종목명 -->
                       <td class="py-2 px-3 font-semibold text-slate-900">${item.asset_name}</td>
+                      <!-- 2. 코드 -->
                       <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">${item.ticker}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
+                      <!-- 3. 매입금액 -->
+                      <td class="py-2 px-2.5 text-right font-mono text-slate-600 bg-slate-50/50">₩${Number(item.buy_amount || 0).toLocaleString()}</td>
+                      <!-- 4. 평균단가 -->
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Math.round(Number(item.avg_buy_price || 0)).toLocaleString()}</td>
+                      <!-- 5. 수량 -->
+                      <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
+                      <!-- 6. 현재가 -->
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
+                      <!-- 7. 평가금액 -->
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/70">₩${Number(item.eval_amount).toLocaleString()}</td>
+                      <!-- 8. 평가손익 -->
+                      <td class="py-2 px-3 text-right font-mono font-semibold ${profitColor}">${item.isCash ? '₩0' : `${sign}₩${Number(item.profit_amount).toLocaleString()}`}</td>
+                      <!-- 9. 수익률 -->
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
+                      <!-- 10. 현재비중 -->
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/40 border-l border-blue-50">${item.weight}%</td>
+                      <!-- 보조 1. 목표비중 -->
                       <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${targetWeightDisplay}</td>
+                      <!-- 보조 2. 밴드하한 -->
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMinText}</td>
+                      <!-- 보조 3. 밴드상한 -->
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMaxText}</td>
+                      <!-- 보조 4. 상태 확인 -->
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
+                      <!-- 보조 5. 매수/매도액 -->
                       <td class="py-2 px-3 text-right font-mono font-medium text-slate-500 border-l border-slate-100">${diffText}</td>
+                      <!-- 보조 6. 조정 주식 수 -->
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-500">${adjText}</td>
                     </tr>
                 `;
@@ -475,7 +483,8 @@ function renderPaginatedRows() {
             }).join('');
 
         } else {
-            // [기본 상태]: 9개 열 콤팩트 본문 렌더링
+            // [기본 상태]: 10개 열 순서 정렬 본문 렌더링
+            // 종목명, 코드, 매입금액, 평균단가, 수량, 현재가, 평가금액, 평가손익, 수익률, 비중
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -483,15 +492,26 @@ function renderPaginatedRows() {
 
                 return `
                     <tr class="hover:bg-blue-50/40 transition-colors border-b border-slate-100 text-[11px] leading-tight whitespace-nowrap">
+                      <!-- 1. 종목명 -->
                       <td class="py-2 px-3 font-semibold text-slate-900">${item.asset_name}</td>
+                      <!-- 2. 코드 -->
                       <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">${item.ticker}</td>
+                      <!-- 3. 매입금액 -->
+                      <td class="py-2 px-2.5 text-right font-mono text-slate-600 bg-slate-50/40">₩${Number(item.buy_amount || 0).toLocaleString()}</td>
+                      <!-- 4. 평균단가 -->
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Math.round(Number(item.avg_buy_price || 0)).toLocaleString()}</td>
-                      <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
+                      <!-- 5. 수량 -->
                       <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
+                      <!-- 6. 현재가 -->
+                      <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
+                      <!-- 7. 평가금액 -->
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/60">₩${Number(item.eval_amount).toLocaleString()}</td>
-                      <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/30">${item.weight}%</td>
+                      <!-- 8. 평가손익 -->
                       <td class="py-2 px-3 text-right font-mono font-semibold ${profitColor}">${item.isCash ? '₩0' : `${sign}₩${Number(item.profit_amount).toLocaleString()}`}</td>
+                      <!-- 9. 수익률 -->
                       <td class="py-2 px-2.5 text-right font-mono font-bold ${profitColor}">${item.isCash ? '0.00%' : `${sign}${item.profit_rate}%`}</td>
+                      <!-- 10. 비중 -->
+                      <td class="py-2 px-2.5 text-right font-mono font-bold text-blue-700 bg-blue-50/30">${item.weight}%</td>
                     </tr>
                 `;
             }).join('');
@@ -508,7 +528,7 @@ function renderPaginatedRows() {
                             <div class="font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">${item.weight}%</div>
                         </div>
                         <div class="flex justify-between items-center text-[11px] text-slate-600">
-                            <span>평가 ₩${Number(item.eval_amount).toLocaleString()} (${Number(item.quantity).toLocaleString()}주)</span>
+                            <span>매입 ₩${Number(item.buy_amount || 0).toLocaleString()} · 평가 ₩${Number(item.eval_amount).toLocaleString()} (${Number(item.quantity).toLocaleString()}주)</span>
                             <span class="font-bold ${profitColor}">${sign}${item.profit_rate}%</span>
                         </div>
                     </div>

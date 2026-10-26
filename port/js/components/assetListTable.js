@@ -1,21 +1,29 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 스마트 뷰어 (수익 종목만 매도 허용 + 밴드하한 턱걸이 탈출 비용 기준 매수 우선순위 산출) + 모바일 2중 인터랙션 토글
+// 스프레드시트형 밴드리밸런싱 스마트 뷰어 (미래-연금 & 삼성-ISA 지원, 턱걸이 복귀법 매수 순위 + 초기 계좌 빈 목표비중 모드)
 
-const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
+const BASE_FIXED_TRADE_ID = 0;
 
 let currentPage = 1;
 let pageSize = 10;
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
-// 💡 미래-연금 밴드리밸런싱 확장 토글 상태 플래그
+// 💡 리밸런싱 확장 토글 상태 플래그
 let isRebalanceExpanded = false;
 // 💡 목표비중 편집 모드 상태 플래그
 let isTargetWeightEditMode = false;
 
-// 💡 모바일 카드 토글 상태 관리 (종목별 고유 키: ticker)
-const mobilePriceViewToggle = new Map(); // false/undefined: 매입/평가, true: 단가/현재가(수량)
-const mobileProfitViewToggle = new Map(); // false/undefined: 수익률, true: 수익금
+// 💡 모바일 카드 토글 상태 관리
+const mobilePriceViewToggle = new Map();
+const mobileProfitViewToggle = new Map();
+
+// 💡 리밸런싱 지원 계좌 판별 헬퍼 (미래-연금, 삼성-ISA)
+function isRebalanceSupportedAccount(accId) {
+    const acc = accId || (typeof currentAccount !== 'undefined' ? currentAccount : 'ALL');
+    return acc === 'MIRAE_PENSION' || 
+           acc === 'SAMSUNG_ISA' || 
+           (acc && (acc.includes('연금') || acc.includes('ISA')) && acc !== 'ALL');
+}
 
 // 💡 목표비중 입력값 전체 합산 계산 헬퍼 함수
 function calculateTotalTargetWeight() {
@@ -64,26 +72,28 @@ function calculateSmartRebalance(items) {
     const buyCandidates = [];
 
     items.forEach(item => {
-        const targetW = (item.target_weight !== null && item.target_weight !== undefined) ? Number(item.target_weight) : null;
+        const hasTarget = (item.target_weight !== null && item.target_weight !== undefined && !isNaN(item.target_weight) && Number(item.target_weight) > 0);
+        const targetW = hasTarget ? Number(item.target_weight) : null;
         const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(2)) : null;
         const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(2)) : null;
         const curWeight = Number(item.weight) || 0;
         const curEval = Number(item.eval_amount) || 0;
         const profitAmt = Number(item.profit_amount || 0);
 
-        let initialStatus = '유지';
+        let initialStatus = '-';
 
-        if (dynamicBandMin !== null && dynamicBandMax !== null) {
+        // 목표비중이 등록되어 있을 때만 매수/매도/유지 상태 산출
+        if (targetW !== null && dynamicBandMin !== null && dynamicBandMax !== null) {
             if (curWeight < dynamicBandMin) {
                 initialStatus = '매수';
             } else if (curWeight > dynamicBandMax) {
-                // 원칙: 예수금(CASH)이거나 평가손익이 0원 이상인 수익 종목만 매도 불 허용!
                 if (item.isCash || profitAmt >= 0) {
                     initialStatus = '매도';
                 } else {
-                    // 손실 중인 종목은 비중이 상한을 넘겨도 손실 확정 방지를 위해 매도 불 차단 (유지 처리)
                     initialStatus = '유지';
                 }
+            } else {
+                initialStatus = '유지';
             }
         }
 
@@ -91,7 +101,7 @@ function calculateSmartRebalance(items) {
         item._buyPriority = null;
         item._rescueCost = 0;
 
-        // 💡 3번 턱걸이 복귀법: 밴드하한선(80%)까지만 끌어올리는 데 필요한 최소 비용 계산
+        // 3번 턱걸이 복귀법: 밴드하한선(80%)까지만 끌어올리는 데 필요한 최소 비용 계산
         if (initialStatus === '매수' && dynamicBandMin !== null) {
             const minRequiredEval = totalNetWorth * (dynamicBandMin / 100.0);
             const rescueCost = Math.max(0, Math.round(minRequiredEval - curEval));
@@ -100,13 +110,10 @@ function calculateSmartRebalance(items) {
         }
     });
 
-    // 💡 밴드하한선(80%) 탈출에 드는 비용(rescueCost)이 가장 적은 종목부터 1위, 2위... 순위 부여
-    buyCandidates.sort((a, b) => {
-        return a._rescueCost - b._rescueCost;
-    });
+    buyCandidates.sort((a, b) => a._rescueCost - b._rescueCost);
 
     buyCandidates.forEach((item, idx) => {
-        item._buyPriority = idx + 1; // 1부터 순위 부여
+        item._buyPriority = idx + 1;
     });
 }
 
@@ -145,10 +152,8 @@ function renderDataTable(viewType, dataList) {
     // ==========================================
     if (viewType === 'HOLDINGS') {
         const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
-        const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
-                                 (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
-
-        const showWideRebalance = isPensionAccount && isRebalanceExpanded;
+        const isSupported = isRebalanceSupportedAccount(selectedAcc);
+        const showWideRebalance = isSupported && isRebalanceExpanded;
 
         if (title) {
             title.textContent = showWideRebalance ? '자산배분 밴드리밸런싱 포트폴리오' : '보유 종목 상세';
@@ -162,7 +167,7 @@ function renderDataTable(viewType, dataList) {
 
         if (showWideRebalance) {
             const initialTotal = calculateTotalTargetWeight();
-            const targetWeightBtnTitle = isTargetWeightEditMode ? `합계: ${initialTotal}% (클릭 시 비중 저장 및 적용)` : '클릭 시 목표비중 수정';
+            const targetWeightBtnTitle = isTargetWeightEditMode ? `합계: ${initialTotal}% (클릭 시 비중 저장 및 적용)` : '클릭 시 목표비중 설정/수정';
             
             let targetHeaderBg = 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900';
             let targetHeaderText = '목표비중';
@@ -215,7 +220,7 @@ function renderDataTable(viewType, dataList) {
             }
 
         } else {
-            const weightHeaderHtml = isPensionAccount 
+            const weightHeaderHtml = isSupported 
                 ? `<th id="thToggleRebalance" title="클릭 시 자산배분 밴드리밸런싱 분석 확장" class="py-2 px-2.5 text-right bg-blue-50/80 hover:bg-blue-100 text-blue-800 cursor-pointer transition select-none">
                     비중 <i class="fa-solid fa-expand text-[10px] ml-0.5 opacity-70"></i>
                    </th>`
@@ -309,7 +314,7 @@ async function saveTargetWeightsAndRecalculate() {
         }
     });
 
-    const activeAccount = (typeof currentAccount !== 'undefined') ? currentAccount : 'MIRAE_PENSION';
+    const activeAccount = (typeof currentAccount !== 'undefined') ? currentAccount : 'SAMSUNG_ISA';
 
     try {
         const res = await fetch('/api/rebalance', {
@@ -381,12 +386,9 @@ function renderPaginatedRows() {
 
     if (currentViewType === 'HOLDINGS') {
         const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
-        const isPensionAccount = (selectedAcc === 'MIRAE_PENSION') || 
-                                 (selectedAcc.includes('연금') && selectedAcc !== 'ALL');
+        const isSupported = isRebalanceSupportedAccount(selectedAcc);
 
-        // 미래-연금이고 확장 토글이 켜진 경우에만 와이드 본문 렌더링
-        if (isPensionAccount && isRebalanceExpanded) {
-            // 💡 턱걸이 복귀법(하한선 최소비용) 기반 매수 우선순위 일괄 산출
+        if (isSupported && isRebalanceExpanded) {
             calculateSmartRebalance(currentDataList);
 
             tbody.innerHTML = pageItems.map(item => {
@@ -394,18 +396,18 @@ function renderPaginatedRows() {
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
                 const sign = isPositive ? '+' : '';
 
-                const targetW = (item.target_weight !== null && item.target_weight !== undefined) ? Number(item.target_weight) : null;
+                const hasTarget = (item.target_weight !== null && item.target_weight !== undefined && !isNaN(item.target_weight) && Number(item.target_weight) > 0);
+                const targetW = hasTarget ? Number(item.target_weight) : null;
                 const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(2)) : null;
                 const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(2)) : null;
 
-                const calculatedStatus = item._calculatedStatus || '유지';
+                const calculatedStatus = item._calculatedStatus || '-';
                 const buyPriority = item._buyPriority;
 
-                let statusBadge = '<span class="text-slate-400">-</span>';
+                let statusBadge = '<span class="text-slate-400 font-bold">-</span>';
                 if (calculatedStatus === '유지') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 유지</span>';
                 } else if (calculatedStatus === '매수') {
-                    // 매수 우선순위 배지 (매수 1, 매수 2...)
                     const priorityText = buyPriority ? `🔵 매수 ${buyPriority}` : '🔵 매수';
                     const rescueTip = item._rescueCost ? ` title="밴드하한 복귀 최소필요액: ₩${item._rescueCost.toLocaleString()}"` : '';
                     statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse cursor-help"${rescueTip}>${priorityText}</span>`;
@@ -413,17 +415,21 @@ function renderPaginatedRows() {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">🔴 매도</span>';
                 }
 
-                const diffAmt = Number(item.diff_amount || 0);
+                // 목표비중이 없으면 조정액 및 주식수 0 또는 초기화
                 let diffText = '₩0';
-                if (diffAmt > 0) diffText = `+₩${diffAmt.toLocaleString()}`;
-                else if (diffAmt < 0) diffText = `-₩${Math.abs(diffAmt).toLocaleString()}`;
-
-                const adjShares = Number(item.adjust_shares || 0);
                 let adjText = '-';
-                if (!item.isCash && item.current_price > 0) {
-                    if (adjShares > 0) adjText = `+${adjShares.toLocaleString()}주`;
-                    else if (adjShares < 0) adjText = `-${Math.abs(adjShares).toLocaleString()}주`;
-                    else adjText = '0주';
+
+                if (hasTarget) {
+                    const diffAmt = Number(item.diff_amount || 0);
+                    if (diffAmt > 0) diffText = `+₩${diffAmt.toLocaleString()}`;
+                    else if (diffAmt < 0) diffText = `-₩${Math.abs(diffAmt).toLocaleString()}`;
+
+                    const adjShares = Number(item.adjust_shares || 0);
+                    if (!item.isCash && item.current_price > 0) {
+                        if (adjShares > 0) adjText = `+${adjShares.toLocaleString()}주`;
+                        else if (adjShares < 0) adjText = `-${Math.abs(adjShares).toLocaleString()}주`;
+                        else adjText = '0주';
+                    }
                 }
 
                 let targetWeightDisplay = '';
@@ -434,6 +440,7 @@ function renderPaginatedRows() {
                           <input type="number" step="0.1" min="0" max="100" 
                                  data-ticker="${item.ticker}" 
                                  value="${currentTargetVal}" 
+                                 placeholder="0"
                                  class="target-weight-input w-11 border border-emerald-400 rounded px-1 py-0.5 text-right font-mono font-bold text-emerald-900 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 text-[11px]" />
                           <span class="text-emerald-700 font-bold ml-0.5">%</span>
                         </div>
@@ -469,14 +476,15 @@ function renderPaginatedRows() {
 
             // [모바일 카드 뷰 - 리밸런싱 모드]
             mobileList.innerHTML = pageItems.map(item => {
-                const targetW = (item.target_weight !== null && item.target_weight !== undefined) ? Number(item.target_weight) : null;
+                const hasTarget = (item.target_weight !== null && item.target_weight !== undefined && !isNaN(item.target_weight) && Number(item.target_weight) > 0);
+                const targetW = hasTarget ? Number(item.target_weight) : null;
                 const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(1)) : 0;
                 const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(1)) : 0;
 
-                const calculatedStatus = item._calculatedStatus || '유지';
+                const calculatedStatus = item._calculatedStatus || '-';
                 const buyPriority = item._buyPriority;
 
-                let statusBadge = '<span class="text-slate-400 text-[10px]">-</span>';
+                let statusBadge = '<span class="text-slate-400 text-[10px] font-bold">-</span>';
                 if (calculatedStatus === '유지') {
                     statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">✅ 유지</span>';
                 } else if (calculatedStatus === '매수') {
@@ -486,17 +494,21 @@ function renderPaginatedRows() {
                     statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">🔴 매도</span>';
                 }
 
-                const diffAmt = Number(item.diff_amount || 0);
                 let diffText = '₩0';
-                if (diffAmt > 0) diffText = `+₩${diffAmt.toLocaleString()}`;
-                else if (diffAmt < 0) diffText = `-₩${Math.abs(diffAmt).toLocaleString()}`;
-
-                const adjShares = Number(item.adjust_shares || 0);
                 let adjText = '';
-                if (!item.isCash && item.current_price > 0) {
-                    if (adjShares > 0) adjText = `(+${adjShares.toLocaleString()}주)`;
-                    else if (adjShares < 0) adjText = `(-${Math.abs(adjShares).toLocaleString()}주)`;
+                if (hasTarget) {
+                    const diffAmt = Number(item.diff_amount || 0);
+                    if (diffAmt > 0) diffText = `+₩${diffAmt.toLocaleString()}`;
+                    else if (diffAmt < 0) diffText = `-₩${Math.abs(diffAmt).toLocaleString()}`;
+
+                    const adjShares = Number(item.adjust_shares || 0);
+                    if (!item.isCash && item.current_price > 0) {
+                        if (adjShares > 0) adjText = `(+${adjShares.toLocaleString()}주)`;
+                        else if (adjShares < 0) adjText = `(-${Math.abs(adjShares).toLocaleString()}주)`;
+                    }
                 }
+
+                const bandText = hasTarget ? `밴드 ${dynamicBandMin}% ~ ${dynamicBandMax}%` : '밴드 미설정';
 
                 return `
                     <div class="py-2.5 px-3 bg-white border-b border-slate-100 text-xs">
@@ -506,10 +518,10 @@ function renderPaginatedRows() {
                         </div>
                         <div class="flex justify-between items-center text-[11px] mb-1">
                             <span class="text-slate-500">평가 ₩${Number(item.eval_amount).toLocaleString()} (${item.weight}%)</span>
-                            <span class="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">목표 ${item.target_weight || '-'}%</span>
+                            <span class="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">목표 ${hasTarget ? item.target_weight + '%' : '-'}</span>
                         </div>
                         <div class="flex justify-between items-center text-[11px] pt-1 border-t border-slate-50">
-                            <span class="text-slate-400">밴드 ${dynamicBandMin}% ~ ${dynamicBandMax}%</span>
+                            <span class="text-slate-400">${bandText}</span>
                             <span class="font-medium text-slate-500">조정 ${diffText} ${adjText}</span>
                         </div>
                     </div>
@@ -529,7 +541,7 @@ function renderPaginatedRows() {
                       <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">${item.ticker}</td>
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600 bg-slate-50/40">₩${Number(item.buy_amount || 0).toLocaleString()}</td>
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Math.round(Number(item.avg_buy_price || 0)).toLocaleString()}</td>
-                      <td class="py-2 px-2.5 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/60">₩${Number(item.eval_amount).toLocaleString()}</td>
                       <td class="py-2 px-3 text-right font-mono font-semibold ${profitColor}">${item.isCash ? '₩0' : `${sign}₩${Number(item.profit_amount).toLocaleString()}`}</td>
@@ -584,7 +596,6 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 모바일 카드 이벤트 바인딩
             const priceBtns = mobileList.querySelectorAll('.mobile-price-toggle-btn');
             priceBtns.forEach(btn => {
                 btn.addEventListener('click', (e) => {

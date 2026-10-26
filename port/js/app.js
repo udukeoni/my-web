@@ -103,9 +103,10 @@ async function fetchD1Portfolio() {
                 if (found) accName = found.account_name;
             }
 
-            const isPensionAccount = (currentAccount === 'MIRAE_PENSION') || 
-                                     (accName && accName.includes('연금')) || 
-                                     (currentAccount && currentAccount.includes('연금'));
+            const isRebalanceAccount = (currentAccount === 'MIRAE_PENSION') || 
+                                       (currentAccount === 'SAMSUNG_ISA') || 
+                                       (accName && (accName.includes('연금') || accName.includes('ISA'))) || 
+                                       (currentAccount && (currentAccount.includes('연금') || currentAccount.includes('ISA')));
 
             let cashTargetWeight = null;
             let cashBandMin = null;

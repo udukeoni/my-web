@@ -1,5 +1,5 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 스마트 뷰어 (수익 종목만 매도 허용 + 매수 우선순위 산출) + 모바일 2중 인터랙션 토글
+// 스프레드시트형 밴드리밸런싱 스마트 뷰어 (수익 종목만 매도 허용 + 밴드하한 턱걸이 탈출 비용 기준 매수 우선순위 산출) + 모바일 2중 인터랙션 토글
 
 const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
@@ -52,8 +52,15 @@ function updateTargetHeaderLiveSum() {
     }
 }
 
-// 💡 스마트 리밸런싱 상태 및 매수 우선순위 계산 헬퍼 함수
+// 💡 스마트 리밸런싱 상태 및 3번(밴드하한 턱걸이 탈출 비용) 우선순위 계산 헬퍼 함수
 function calculateSmartRebalance(items) {
+    let totalNetWorth = 0;
+    if (typeof cachedSummary !== 'undefined' && cachedSummary && cachedSummary.netWorth) {
+        totalNetWorth = Number(cachedSummary.netWorth);
+    } else {
+        totalNetWorth = items.reduce((sum, item) => sum + (Number(item.eval_amount) || 0), 0);
+    }
+
     const buyCandidates = [];
 
     items.forEach(item => {
@@ -61,6 +68,7 @@ function calculateSmartRebalance(items) {
         const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(2)) : null;
         const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(2)) : null;
         const curWeight = Number(item.weight) || 0;
+        const curEval = Number(item.eval_amount) || 0;
         const profitAmt = Number(item.profit_amount || 0);
 
         let initialStatus = '유지';
@@ -73,7 +81,7 @@ function calculateSmartRebalance(items) {
                 if (item.isCash || profitAmt >= 0) {
                     initialStatus = '매도';
                 } else {
-                    // 손실 중인 종목은 비중이 넘쳐도 손실 확정 방지를 위해 매도 불 차단 (유지 처리)
+                    // 손실 중인 종목은 비중이 상한을 넘겨도 손실 확정 방지를 위해 매도 불 차단 (유지 처리)
                     initialStatus = '유지';
                 }
             }
@@ -81,19 +89,20 @@ function calculateSmartRebalance(items) {
 
         item._calculatedStatus = initialStatus;
         item._buyPriority = null;
+        item._rescueCost = 0;
 
-        // 매수가 필요한 종목은 우선순위 산출 후보군에 등록
-        if (initialStatus === '매수') {
+        // 💡 3번 턱걸이 복귀법: 밴드하한선(80%)까지만 끌어올리는 데 필요한 최소 비용 계산
+        if (initialStatus === '매수' && dynamicBandMin !== null) {
+            const minRequiredEval = totalNetWorth * (dynamicBandMin / 100.0);
+            const rescueCost = Math.max(0, Math.round(minRequiredEval - curEval));
+            item._rescueCost = rescueCost;
             buyCandidates.push(item);
         }
     });
 
-    // 💡 매수 후보군 우선순위 부여: 목표 비중 도달에 가장 적은 금액(diff_amount)이 드는 종목 우선!
-    // diff_amount는 양수(필요 자금)이므로 오름차순(가장 적은 비용부터) 정렬
+    // 💡 밴드하한선(80%) 탈출에 드는 비용(rescueCost)이 가장 적은 종목부터 1위, 2위... 순위 부여
     buyCandidates.sort((a, b) => {
-        const diffA = Math.max(0, Number(a.diff_amount || 0));
-        const diffB = Math.max(0, Number(b.diff_amount || 0));
-        return diffA - diffB;
+        return a._rescueCost - b._rescueCost;
     });
 
     buyCandidates.forEach((item, idx) => {
@@ -173,7 +182,7 @@ function renderDataTable(viewType, dataList) {
                   <th class="py-2 px-2 text-center">코드</th>
                   <th class="py-2 px-2.5 text-right bg-slate-200/40">매입금액</th>
                   <th class="py-2 px-2.5 text-right">평균단가</th>
-                  <th class="py-2 px-2 text-right">수량</th>
+                  <th class="py-2 px-2.5 text-right">수량</th>
                   <th class="py-2 px-2.5 text-right">현재가</th>
                   <th class="py-2 px-3 text-right bg-slate-200/50">평가금액</th>
                   <th class="py-2 px-3 text-right">평가손익</th>
@@ -218,7 +227,7 @@ function renderDataTable(viewType, dataList) {
                   <th class="py-2 px-2 text-center">코드</th>
                   <th class="py-2 px-2.5 text-right bg-slate-200/40">매입금액</th>
                   <th class="py-2 px-2.5 text-right">평균단가</th>
-                  <th class="py-2 px-2 text-right">수량</th>
+                  <th class="py-2 px-2.5 text-right">수량</th>
                   <th class="py-2 px-2.5 text-right">현재가</th>
                   <th class="py-2 px-3 text-right bg-slate-200/50">평가금액</th>
                   <th class="py-2 px-3 text-right">평가손익</th>
@@ -377,7 +386,7 @@ function renderPaginatedRows() {
 
         // 미래-연금이고 확장 토글이 켜진 경우에만 와이드 본문 렌더링
         if (isPensionAccount && isRebalanceExpanded) {
-            // 스마트 판정 및 매수 우선순위 일괄 산출 (전체 목록 기준 계산)
+            // 💡 턱걸이 복귀법(하한선 최소비용) 기반 매수 우선순위 일괄 산출
             calculateSmartRebalance(currentDataList);
 
             tbody.innerHTML = pageItems.map(item => {
@@ -398,7 +407,8 @@ function renderPaginatedRows() {
                 } else if (calculatedStatus === '매수') {
                     // 매수 우선순위 배지 (매수 1, 매수 2...)
                     const priorityText = buyPriority ? `🔵 매수 ${buyPriority}` : '🔵 매수';
-                    statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">${priorityText}</span>`;
+                    const rescueTip = item._rescueCost ? ` title="밴드하한 복귀 최소필요액: ₩${item._rescueCost.toLocaleString()}"` : '';
+                    statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse cursor-help"${rescueTip}>${priorityText}</span>`;
                 } else if (calculatedStatus === '매도') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">🔴 매도</span>';
                 }
@@ -519,7 +529,7 @@ function renderPaginatedRows() {
                       <td class="py-2 px-2 text-center font-mono text-[10px] text-slate-400">${item.ticker}</td>
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600 bg-slate-50/40">₩${Number(item.buy_amount || 0).toLocaleString()}</td>
                       <td class="py-2 px-2.5 text-right font-mono text-slate-600">₩${Math.round(Number(item.avg_buy_price || 0)).toLocaleString()}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
+                      <td class="py-2 px-2.5 text-right font-mono text-slate-700">${item.isCash ? '1' : Number(item.quantity).toLocaleString()}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-800">₩${Number(item.current_price).toLocaleString()}</td>
                       <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/60">₩${Number(item.eval_amount).toLocaleString()}</td>
                       <td class="py-2 px-3 text-right font-mono font-semibold ${profitColor}">${item.isCash ? '₩0' : `${sign}₩${Number(item.profit_amount).toLocaleString()}`}</td>

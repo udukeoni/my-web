@@ -1,5 +1,5 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 고밀도 뷰어 + 모바일 카드 2중 인터랙션 토글 (매입/평가 ↔ 단가/현재가/수량, 수익률 ↔ 수익금)
+// 스프레드시트형 밴드리밸런싱 스마트 뷰어 (수익 종목만 매도 허용 + 매수 우선순위 산출) + 모바일 2중 인터랙션 토글
 
 const BASE_FIXED_TRADE_ID = 0; // 신규 거래내역 전면 수정/삭제 허용
 
@@ -50,6 +50,55 @@ function updateTargetHeaderLiveSum() {
         btn.className = 'py-2 px-2 text-right cursor-pointer transition select-none bg-amber-200 text-amber-950 font-black ring-1 ring-inset ring-amber-500';
         btn.title = `현재 합계: ${total}% (100%에 맞춰 조절 후 클릭하여 저장)`;
     }
+}
+
+// 💡 스마트 리밸런싱 상태 및 매수 우선순위 계산 헬퍼 함수
+function calculateSmartRebalance(items) {
+    const buyCandidates = [];
+
+    items.forEach(item => {
+        const targetW = (item.target_weight !== null && item.target_weight !== undefined) ? Number(item.target_weight) : null;
+        const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(2)) : null;
+        const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(2)) : null;
+        const curWeight = Number(item.weight) || 0;
+        const profitAmt = Number(item.profit_amount || 0);
+
+        let initialStatus = '유지';
+
+        if (dynamicBandMin !== null && dynamicBandMax !== null) {
+            if (curWeight < dynamicBandMin) {
+                initialStatus = '매수';
+            } else if (curWeight > dynamicBandMax) {
+                // 원칙: 예수금(CASH)이거나 평가손익이 0원 이상인 수익 종목만 매도 불 허용!
+                if (item.isCash || profitAmt >= 0) {
+                    initialStatus = '매도';
+                } else {
+                    // 손실 중인 종목은 비중이 넘쳐도 손실 확정 방지를 위해 매도 불 차단 (유지 처리)
+                    initialStatus = '유지';
+                }
+            }
+        }
+
+        item._calculatedStatus = initialStatus;
+        item._buyPriority = null;
+
+        // 매수가 필요한 종목은 우선순위 산출 후보군에 등록
+        if (initialStatus === '매수') {
+            buyCandidates.push(item);
+        }
+    });
+
+    // 💡 매수 후보군 우선순위 부여: 목표 비중 도달에 가장 적은 금액(diff_amount)이 드는 종목 우선!
+    // diff_amount는 양수(필요 자금)이므로 오름차순(가장 적은 비용부터) 정렬
+    buyCandidates.sort((a, b) => {
+        const diffA = Math.max(0, Number(a.diff_amount || 0));
+        const diffB = Math.max(0, Number(b.diff_amount || 0));
+        return diffA - diffB;
+    });
+
+    buyCandidates.forEach((item, idx) => {
+        item._buyPriority = idx + 1; // 1부터 순위 부여
+    });
 }
 
 function renderDataTable(viewType, dataList) {
@@ -279,12 +328,7 @@ async function saveTargetWeightsAndRecalculate() {
                 const newTarget = updatedMap.get(item.ticker);
                 const newBandMin = Number((newTarget * 0.8).toFixed(2));
                 const newBandMax = Number((newTarget * 1.2).toFixed(2));
-                const currentWeight = Number(item.weight) || 0;
                 const currentEval = Number(item.eval_amount) || 0;
-
-                let newStatus = '유지';
-                if (currentWeight < newBandMin) newStatus = '매수';
-                else if (currentWeight > newBandMax) newStatus = '매도';
 
                 const targetEval = totalNetWorth * (newTarget / 100);
                 const diffAmount = Math.round(targetEval - currentEval);
@@ -296,7 +340,6 @@ async function saveTargetWeightsAndRecalculate() {
                 item.target_weight = newTarget;
                 item.band_min = newBandMin;
                 item.band_max = newBandMax;
-                item.rebalance_status = newStatus;
                 item.diff_amount = diffAmount;
                 item.adjust_shares = adjustShares;
             }
@@ -334,6 +377,9 @@ function renderPaginatedRows() {
 
         // 미래-연금이고 확장 토글이 켜진 경우에만 와이드 본문 렌더링
         if (isPensionAccount && isRebalanceExpanded) {
+            // 스마트 판정 및 매수 우선순위 일괄 산출 (전체 목록 기준 계산)
+            calculateSmartRebalance(currentDataList);
+
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -343,18 +389,16 @@ function renderPaginatedRows() {
                 const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(2)) : null;
                 const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(2)) : null;
 
-                const curWeight = Number(item.weight) || 0;
-                let calculatedStatus = '유지';
-                if (dynamicBandMin !== null && dynamicBandMax !== null) {
-                    if (curWeight < dynamicBandMin) calculatedStatus = '매수';
-                    else if (curWeight > dynamicBandMax) calculatedStatus = '매도';
-                }
+                const calculatedStatus = item._calculatedStatus || '유지';
+                const buyPriority = item._buyPriority;
 
                 let statusBadge = '<span class="text-slate-400">-</span>';
                 if (calculatedStatus === '유지') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 유지</span>';
                 } else if (calculatedStatus === '매수') {
-                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">🔵 매수</span>';
+                    // 매수 우선순위 배지 (매수 1, 매수 2...)
+                    const priorityText = buyPriority ? `🔵 매수 ${buyPriority}` : '🔵 매수';
+                    statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">${priorityText}</span>`;
                 } else if (calculatedStatus === '매도') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">🔴 매도</span>';
                 }
@@ -419,20 +463,17 @@ function renderPaginatedRows() {
                 const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(1)) : 0;
                 const dynamicBandMax = targetW !== null ? Number((targetW * 1.2).toFixed(1)) : 0;
 
-                const curWeight = Number(item.weight) || 0;
-                let calculatedStatus = '유지';
-                if (targetW !== null) {
-                    if (curWeight < dynamicBandMin) calculatedStatus = '매수';
-                    else if (curWeight > dynamicBandMax) calculatedStatus = '매도';
-                }
+                const calculatedStatus = item._calculatedStatus || '유지';
+                const buyPriority = item._buyPriority;
 
                 let statusBadge = '<span class="text-slate-400 text-[10px]">-</span>';
                 if (calculatedStatus === '유지') {
                     statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">✅ 유지</span>';
                 } else if (calculatedStatus === '매수') {
-                    statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">🔵 매수 권장</span>';
+                    const priorityText = buyPriority ? `🔵 매수 ${buyPriority}` : '🔵 매수';
+                    statusBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">${priorityText}</span>`;
                 } else if (calculatedStatus === '매도') {
-                    statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">🔴 매도 권장</span>';
+                    statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">🔴 매도</span>';
                 }
 
                 const diffAmt = Number(item.diff_amount || 0);
@@ -488,53 +529,43 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 💡 [모바일 카드 뷰 - 인터랙션 토글 완벽 적용]
+            // [모바일 카드 뷰 - 인터랙션 토글 적용]
             mobileList.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
                 const sign = isPositive ? '+' : '';
 
-                // A. 매입/평가 ↔ 단가/현재가(수량) 토글 렌더링
                 const isPriceToggled = mobilePriceViewToggle.get(item.ticker) === true;
                 let priceHtml = '';
                 if (!isPriceToggled) {
-                    // 1번 요청: 수량 빼고 매입~~평가~~만 깔끔하게 표시
                     priceHtml = `<span>매입 ₩${Number(item.buy_amount || 0).toLocaleString()} · 평가 ₩${Number(item.eval_amount).toLocaleString()}</span>`;
                 } else {
-                    // 3번 요청: 평균단가, 현재가, 수량(괄호) 표시
                     const avgPriceStr = Math.round(Number(item.avg_buy_price || 0)).toLocaleString();
                     const curPriceStr = Number(item.current_price).toLocaleString();
                     const qtyStr = item.isCash ? '1주' : `${Number(item.quantity).toLocaleString()}주`;
                     priceHtml = `<span>평균단가: ₩${avgPriceStr} · 현재가: ₩${curPriceStr} (${qtyStr})</span>`;
                 }
 
-                // B. 수익률 ↔ 수익금 토글 렌더링
                 const isProfitToggled = mobileProfitViewToggle.get(item.ticker) === true;
                 let profitHtml = '';
                 if (item.isCash) {
                     profitHtml = `<span class="font-bold ${profitColor}">+0%</span>`;
                 } else if (!isProfitToggled) {
-                    // 기본: 수익률
                     profitHtml = `<span class="font-bold ${profitColor}">${sign}${item.profit_rate}%</span>`;
                 } else {
-                    // 토글: 수익금
                     profitHtml = `<span class="font-bold ${profitColor}">${sign}₩${Number(item.profit_amount).toLocaleString()}</span>`;
                 }
 
                 return `
                     <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs select-none">
-                        <!-- 상단: 종목명 및 비중 (비중은 회색빛 박스 유지) -->
                         <div class="flex justify-between items-center mb-1">
                             <div class="font-bold text-slate-900 truncate max-w-[190px]">${item.asset_name}</div>
                             <div class="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">${item.weight}%</div>
                         </div>
-                        <!-- 하단: 토글형 매입/평가 & 토글형 수익률/손익금 -->
                         <div class="flex justify-between items-center text-[11px] text-slate-600">
-                            <!-- 2번 요청: 매입/평가 영역 버튼화 (기존 디자인 유지) -->
                             <div class="mobile-price-toggle-btn cursor-pointer py-0.5 active:opacity-60 transition" data-ticker="${item.ticker}">
                                 ${priceHtml}
                             </div>
-                            <!-- 5번 요청: 수익률/수익금 영역 버튼화 -->
                             <div class="mobile-profit-toggle-btn cursor-pointer py-0.5 active:opacity-60 transition" data-ticker="${item.ticker}">
                                 ${profitHtml}
                             </div>
@@ -543,7 +574,7 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 💡 모바일 카드 이벤트 바인딩
+            // 모바일 카드 이벤트 바인딩
             const priceBtns = mobileList.querySelectorAll('.mobile-price-toggle-btn');
             priceBtns.forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -551,7 +582,7 @@ function renderPaginatedRows() {
                     const ticker = btn.dataset.ticker;
                     const curState = mobilePriceViewToggle.get(ticker) || false;
                     mobilePriceViewToggle.set(ticker, !curState);
-                    renderPaginatedRows(); // 화면 즉시 재렌더링
+                    renderPaginatedRows();
                 });
             });
 
@@ -562,7 +593,7 @@ function renderPaginatedRows() {
                     const ticker = btn.dataset.ticker;
                     const curState = mobileProfitViewToggle.get(ticker) || false;
                     mobileProfitViewToggle.set(ticker, !curState);
-                    renderPaginatedRows(); // 화면 즉시 재렌더링
+                    renderPaginatedRows();
                 });
             });
         }

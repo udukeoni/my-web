@@ -114,7 +114,7 @@ async function fetchD1Portfolio() {
             let cashStatus = '유지';
             let cashDiffAmount = 0;
 
-            if (isPensionAccount) {
+            if (isRebalanceAccount) {
                 // 💡 D1 DB에서 조회되어 내려온 data.rebalanceCashSetting을 1순위로 직통 연결!
                 const cashDbSetting = data.rebalanceCashSetting || {};
 

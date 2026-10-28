@@ -25,7 +25,7 @@ function calculateDeltaCash(tradeType, settleAmount, tax) {
  * @param {string} ticker 종목코드
  * @param {string} tradeType 거래구분
  * @param {number} qty 수량
- * @param {number} settleAmount 정산금액
+ * @param {number} settleAmount 정산금액 (순수 매수 체결금액)
  * @param {number} fee 세금/수수료
  * @param {boolean} isRollback 역산 여부 (삭제나 수정 시 이전 데이터 효과 제거용)
  */
@@ -36,8 +36,11 @@ async function updateHoldingBalance(db, accountId, ticker, tradeType, qty, settl
 
     const q = Number(qty) || 0;
     const settle = Number(settleAmount) || 0;
-    const tax = Number(fee) || 0;
-    const cost = settle + tax; // 매수 시 투입된 총 원금
+    
+    // 💡 [핵심 계산식 수정]
+    // settleAmount(정산금액)는 순수 체결금액(수량 × 단가)이므로
+    // holdings의 매입원가(total_buy_amount)에는 세금을 더하지 않고 순수 settle만 누적합니다.
+    const cost = settle;
 
     // 1. 현재 잔고 확인
     const current = await db.prepare("SELECT * FROM holdings WHERE account_id = ? AND ticker = ?")
@@ -86,7 +89,6 @@ async function updateHoldingBalance(db, accountId, ticker, tradeType, qty, settl
         const finalAvgPrice = finalQty > 0 ? Math.round(finalTotalBuy / finalQty) : (current ? current.avg_buy_price : 0);
 
         if (!current && isRollback) {
-            // 삭제(Rollback)했는데 잔고가 아예 없었다면 새로 생성
             return db.prepare("INSERT INTO holdings (account_id, ticker, quantity, total_buy_amount, avg_buy_price) VALUES (?, ?, ?, ?, ?)")
                 .bind(accountId, ticker, finalQty, finalTotalBuy, finalAvgPrice);
         }
@@ -133,12 +135,12 @@ export async function onRequestPost(context) {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(trade_date, account_id, trade_type, ticker, Number(quantity) || 0, Number(unit_price) || 0, Number(settle_amount) || 0, Number(tax) || 0, memo || ''));
 
-        // 2) 계좌 예수금 반영
+        // 2) 계좌 예수금 반영 (실제 빠져나간 금액 = settle + tax)
         statements.push(db.prepare(`
             UPDATE accounts SET cash_balance = cash_balance + ? WHERE account_id = ?
         `).bind(deltaCash, account_id));
 
-        // 3) 종목 잔고(holdings) 반영
+        // 3) 종목 잔고(holdings) 반영 (순수 매입원금 = settle)
         const holdingStmt = await updateHoldingBalance(db, account_id, ticker, trade_type, quantity, settle_amount, tax, false);
         if (holdingStmt) statements.push(holdingStmt);
 

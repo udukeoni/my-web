@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS holdings (
     ticker TEXT NOT NULL,
     quantity INTEGER NOT NULL,
     avg_buy_price INTEGER NOT NULL,
+    total_buy_amount INTEGER DEFAULT 0,
     target_weight REAL DEFAULT 0.0,
     FOREIGN KEY (account_id) REFERENCES accounts(account_id),
     FOREIGN KEY (ticker) REFERENCES assets(ticker),

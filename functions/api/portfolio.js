@@ -1,5 +1,5 @@
 // functions/api/portfolio.js
-// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 회계 + 밴드 배율(하한 x0.8, 상한 x1.2) 백엔드 자동 연산
+// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 회계 + 밴드 배율(하한 x0.8, 상한 x1.2) 백엔드 자동 연산 + 서버 기준 공통 동기화 시간(lastSyncTime) 반환
 
 export async function onRequestGet(context) {
     const { request, env } = context;
@@ -247,10 +247,20 @@ export async function onRequestGet(context) {
             console.error("차트 데이터 조회 에러:", chartErr.message);
         }
 
+        // 8. 💡 서버 DB 기준 최신 동기화 일시 조회 (공포탐욕지수/fgi_data 또는 최신 거래일시 연동)
+        let serverSyncTime = new Date().toISOString();
+        try {
+            const fgiTimeRes = await db.prepare("SELECT updated_at FROM fgi_data ORDER BY date DESC LIMIT 1").first();
+            if (fgiTimeRes && fgiTimeRes.updated_at) {
+                serverSyncTime = fgiTimeRes.updated_at;
+            }
+        } catch (_) {}
+
         return new Response(JSON.stringify({
             success: true,
             accountFilter,
             viewType,
+            lastSyncTime: serverSyncTime,
             summary: {
                 netWorth,
                 totalStockEval,
@@ -259,7 +269,8 @@ export async function onRequestGet(context) {
                 profitAmount: totalProfit,
                 stockProfitRate,
                 netProfitRate,
-                cashWeight
+                cashWeight,
+                lastUpdated: serverSyncTime
             },
             accounts,
             holdings: holdingsWithWeight,

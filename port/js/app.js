@@ -1,5 +1,5 @@
 // port/js/app.js
-// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 + PC/모바일 정밀 2단계 동기화 인터랙션
+// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 + PC/모바일 정밀 2단계 동기화 인터랙션 (서버 기준 동기화 시간 연동)
 
 let currentAccount = 'ALL';
 let currentView = 'OVERVIEW'; // 기본값을 '자산 현황(OVERVIEW)'으로 설정
@@ -42,6 +42,18 @@ function formatKstDateTime(isoString) {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
+// 화면 툴팁 동기화 시간 갱신 헬퍼
+function updateSyncTooltipDisplay(serverTime) {
+    const timeEl = document.getElementById('syncTooltipTime');
+    if (!timeEl) return;
+    if (serverTime) {
+        timeEl.textContent = serverTime;
+        localStorage.setItem('PORTFOLIO_LAST_SYNC', serverTime);
+    } else {
+        timeEl.textContent = localStorage.getItem('PORTFOLIO_LAST_SYNC') || '확인 중...';
+    }
+}
+
 async function fetchD1Portfolio() {
     try {
         const apiView = currentView === 'OVERVIEW' ? 'HOLDINGS' : currentView;
@@ -56,6 +68,13 @@ async function fetchD1Portfolio() {
         cachedHoldings = data.holdings || [];
         cachedLogs = data.logs || [];
         cachedSummary = data.summary || {};
+
+        // 💡 서버에서 전달된 마지막 동기화 시간(lastSyncTime)이 있으면 기기 간 공통 반영
+        if (data.lastSyncTime) {
+            updateSyncTooltipDisplay(formatKstDateTime(data.lastSyncTime));
+        } else if (data.summary && data.summary.lastUpdated) {
+            updateSyncTooltipDisplay(formatKstDateTime(data.summary.lastUpdated));
+        }
 
         // 1. 계좌 선택 드롭다운 채우기
         populateAccountOptions(cachedAccounts);
@@ -666,9 +685,7 @@ function setupSyncPriceButton() {
 
     // 저장된 마지막 동기화 시각 화면 반영
     const updateTooltipText = (savedTime) => {
-        if (!timeEl) return;
-        const timeToDisplay = savedTime || localStorage.getItem('PORTFOLIO_LAST_SYNC') || formatKstDateTime();
-        timeEl.textContent = timeToDisplay;
+        updateSyncTooltipDisplay(savedTime);
     };
 
     updateTooltipText();
@@ -711,8 +728,7 @@ function setupSyncPriceButton() {
                     localStorage.setItem('DAILY_RATES_CACHE', JSON.stringify(result.dailyRates));
                 }
                 const currentSyncTime = formatKstDateTime(result.updatedAt);
-                localStorage.setItem('PORTFOLIO_LAST_SYNC', currentSyncTime);
-                updateTooltipText(currentSyncTime);
+                updateSyncTooltipDisplay(currentSyncTime);
 
                 // 동기화 완료 후 갱신된 시간을 2초간 띄워줌
                 showTooltip();

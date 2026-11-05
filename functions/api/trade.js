@@ -115,6 +115,7 @@ export async function onRequestPost(context) {
             account_id,
             trade_type,
             ticker,
+            stock_name = '',
             quantity = 0,
             unit_price = 0,
             settle_amount = 0,
@@ -128,6 +129,19 @@ export async function onRequestPost(context) {
 
         const deltaCash = calculateDeltaCash(trade_type, settle_amount, tax);
         const statements = [];
+
+        // 💡 [신규 종목 마스터 자동 추가] assets 테이블에 없는 종목이면 자동 등록하여 외래키 오류 방지
+        if (ticker !== 'CASH' && ticker !== 'INTEREST') {
+            const existingAsset = await db.prepare("SELECT ticker FROM assets WHERE ticker = ?").bind(ticker).first();
+            if (!existingAsset) {
+                const displayName = stock_name.trim() || ticker;
+                const initialPrice = Number(unit_price) || 0;
+                statements.push(
+                    db.prepare("INSERT INTO assets (ticker, asset_name, sector, current_price) VALUES (?, ?, '기타', ?)")
+                        .bind(ticker, displayName, initialPrice)
+                );
+            }
+        }
 
         // 1) 거래 로그 기록
         statements.push(db.prepare(`
@@ -164,7 +178,7 @@ export async function onRequestPut(context) {
     try {
         const db = env.DB;
         const body = await request.json();
-        const { trade_id, trade_date, account_id, trade_type, ticker, quantity = 0, unit_price = 0, settle_amount = 0, tax = 0, memo = '' } = body;
+        const { trade_id, trade_date, account_id, trade_type, ticker, stock_name = '', quantity = 0, unit_price = 0, settle_amount = 0, tax = 0, memo = '' } = body;
 
         if (!trade_id) {
             return new Response(JSON.stringify({ success: false, error: "수정할 trade_id가 없습니다." }), { status: 400 });
@@ -180,6 +194,19 @@ export async function onRequestPut(context) {
         }
 
         const statements = [];
+
+        // 💡 [신규 종목 마스터 자동 추가]
+        if (ticker !== 'CASH' && ticker !== 'INTEREST') {
+            const existingAsset = await db.prepare("SELECT ticker FROM assets WHERE ticker = ?").bind(ticker).first();
+            if (!existingAsset) {
+                const displayName = stock_name.trim() || ticker;
+                const initialPrice = Number(unit_price) || 0;
+                statements.push(
+                    db.prepare("INSERT INTO assets (ticker, asset_name, sector, current_price) VALUES (?, ?, '기타', ?)")
+                        .bind(ticker, displayName, initialPrice)
+                );
+            }
+        }
 
         // --- [STEP 1] 이전 데이터 효과 제거 (Rollback) ---
         const oldDelta = calculateDeltaCash(oldLog.trade_type, oldLog.settle_amount, oldLog.fee);

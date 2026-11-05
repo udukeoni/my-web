@@ -1,14 +1,11 @@
 // port/js/app.js
-// 계좌 선택, 탭 스위칭, 밴드리밸런싱 데이터 보존, 거래 모달 + OCR 이미지 인식 + PC/모바일 정밀 2단계 동기화 인터랙션 (서버 기준 동기화 시간 연동)
-
 let currentAccount = 'ALL';
-let currentView = 'OVERVIEW'; // 기본값을 '자산 현황(OVERVIEW)'으로 설정
+let currentView = 'OVERVIEW';
 let cachedAccounts = [];
 let cachedHoldings = [];
 let cachedLogs = [];
 let cachedSummary = null;
 
-// 사용자 지정 증권사 계좌번호 식별 매핑 규칙
 const ACCOUNT_OCR_MAP = [
     { pattern: '80-0', accountId: 'MIRAE_PENSION', name: '미래-연금' },
     { pattern: '40-0', accountId: 'MIRAE_01', name: '미래에셋' },
@@ -18,7 +15,6 @@ const ACCOUNT_OCR_MAP = [
     { pattern: '-05', accountId: 'SAMSUNG_CMA', name: '삼성-CMA' }
 ];
 
-// 로컬에 캐시된 일간 등락률 가져오기
 function getStoredDailyRates() {
     try {
         return JSON.parse(localStorage.getItem('DAILY_RATES_CACHE') || '{}');
@@ -27,7 +23,6 @@ function getStoredDailyRates() {
     }
 }
 
-// 한국 시간(KST) YYYY-MM-DD HH:mm:ss 포맷팅 헬퍼
 function formatKstDateTime(isoString) {
     const d = isoString ? new Date(isoString) : new Date();
     const pad = (n) => String(n).padStart(2, '0');
@@ -42,7 +37,6 @@ function formatKstDateTime(isoString) {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-// 화면 툴팁 동기화 시간 갱신 헬퍼
 function updateSyncTooltipDisplay(serverTime) {
     const timeEl = document.getElementById('syncTooltipTime');
     if (!timeEl) return;
@@ -63,43 +57,34 @@ async function fetchD1Portfolio() {
         const data = await res.json();
         if (!data.success) throw new Error(data.error);
 
-        // 계좌, 종목, 거래로그 캐싱
         cachedAccounts = data.accounts || [];
         cachedHoldings = data.holdings || [];
         cachedLogs = data.logs || [];
         cachedSummary = data.summary || {};
 
-        // 💡 서버에서 전달된 마지막 동기화 시간(lastSyncTime)이 있으면 기기 간 공통 반영
         if (data.lastSyncTime) {
             updateSyncTooltipDisplay(formatKstDateTime(data.lastSyncTime));
         } else if (data.summary && data.summary.lastUpdated) {
             updateSyncTooltipDisplay(formatKstDateTime(data.summary.lastUpdated));
         }
 
-        // 1. 계좌 선택 드롭다운 채우기
         populateAccountOptions(cachedAccounts);
-
-        // 2. 모달창 콤보박스 채우기
         populateModalOptions(cachedAccounts, cachedHoldings);
 
-        // 3. 상단 요약 카드 및 자산추이 차트 렌더링
         if (typeof renderSummaryCard === 'function') {
             renderSummaryCard(data.summary, data.chartData);
         }
 
-        // 4. 종목 데이터에 최신 일간 등락률 매핑
         const dailyRatesMap = getStoredDailyRates();
         const holdingsWithDaily = cachedHoldings.map(h => ({
             ...h,
             daily_change_rate: dailyRatesMap[h.ticker] !== undefined ? dailyRatesMap[h.ticker] : (h.daily_change_rate || 0)
         }));
 
-        // 5. 자산 비중 트리맵 차트 렌더링 (순수 주식 종목 대상)
         if (typeof renderTreemapChart === 'function') {
             renderTreemapChart(holdingsWithDaily);
         }
 
-        // 6. 리밸런싱 속성(target_weight, band_min/max 등)을 온전히 유지하며 비중 재계산
         const totalNetWorth = Number(cachedSummary.netWorth) || 0;
         const cashBalance = Number(cachedSummary.cashBalance) || 0;
 
@@ -112,7 +97,6 @@ async function fetchD1Portfolio() {
             };
         });
 
-        // 7. 예수금(CASH) 가상 종목 추가 시 밴드리밸런싱 연산 보존 (💡 D1 DB rebalance_settings 직통 연동!)
         if (cashBalance > 0) {
             const cashWeight = totalNetWorth > 0 ? Number(((cashBalance / totalNetWorth) * 100).toFixed(2)) : 0;
             
@@ -134,7 +118,6 @@ async function fetchD1Portfolio() {
             let cashDiffAmount = 0;
 
             if (isRebalanceAccount) {
-                // 💡 D1 DB에서 조회되어 내려온 data.rebalanceCashSetting을 1순위로 직통 연결!
                 const cashDbSetting = data.rebalanceCashSetting || {};
 
                 cashTargetWeight = (cashDbSetting.target_weight !== undefined && cashDbSetting.target_weight !== null)
@@ -186,23 +169,17 @@ async function fetchD1Portfolio() {
             });
         }
 
-        // 8. 화면 스위칭 및 테이블 렌더링
         applyViewSwitching(tableDisplayHoldings);
 
     } catch (err) {
         console.error("D1 API 호출 에러:", err);
         const tbody = document.getElementById('tableBody');
         const mobileList = document.getElementById('mobileCardList');
-        if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="14" class="py-8 text-center text-red-500">DB 연동 오류: ${err.message}</td></tr>`;
-        }
-        if (mobileList) {
-            mobileList.innerHTML = `<div class="py-8 text-center text-red-500 text-sm">DB 연동 오류: ${err.message}</div>`;
-        }
+        if (tbody) tbody.innerHTML = `<tr><td colspan="14" class="py-8 text-center text-red-500">DB 연동 오류: ${err.message}</td></tr>`;
+        if (mobileList) mobileList.innerHTML = `<div class="py-8 text-center text-red-500 text-sm">DB 연동 오류: ${err.message}</div>`;
     }
 }
 
-// 자산현황 ↔ 상세 테이블 동적 전환(스위칭) 함수
 function applyViewSwitching(holdingsData) {
     const overviewBox = document.getElementById('overviewContainer');
     const tableBox = document.getElementById('tableContainer');
@@ -317,7 +294,131 @@ function setupTabButtons() {
     });
 }
 
-// 거래내역 모달 및 OCR 파싱 연동 컨트롤러
+// 💡 [신규 추가] 네이버 증권 종목 실시간 검색 및 콤보박스 연동 엔진
+function setupStockSearchEngine() {
+    const btnToggle = document.getElementById('btnToggleStockSearch');
+    const searchPanel = document.getElementById('stockSearchPanel');
+    const btnClose = document.getElementById('btnCloseStockSearch');
+    const inputKeyword = document.getElementById('inputStockKeyword');
+    const resultsContainer = document.getElementById('stockSearchResults');
+    const stockSelect = document.getElementById('txStock');
+    const hiddenStockName = document.getElementById('txStockName');
+
+    if (!btnToggle || !searchPanel || !inputKeyword || !resultsContainer || !stockSelect) return;
+
+    let debounceTimer = null;
+
+    const openSearchPanel = () => {
+        searchPanel.classList.remove('hidden');
+        inputKeyword.value = '';
+        resultsContainer.innerHTML = '<div class="py-4 text-center text-slate-400 text-[11px]">한글 종목명을 2글자 이상 입력하세요</div>';
+        setTimeout(() => inputKeyword.focus(), 100);
+    };
+
+    const closeSearchPanel = () => {
+        searchPanel.classList.add('hidden');
+    };
+
+    btnToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (searchPanel.classList.contains('hidden')) {
+            openSearchPanel();
+        } else {
+            closeSearchPanel();
+        }
+    });
+
+    if (btnClose) {
+        btnClose.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeSearchPanel();
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        if (!searchPanel.contains(e.target) && !btnToggle.contains(e.target)) {
+            closeSearchPanel();
+        }
+    });
+
+    // 실시간 검색어 입력 처리 (디바운스 300ms)
+    inputKeyword.addEventListener('input', () => {
+        const query = inputKeyword.value.trim();
+
+        if (debounceTimer) clearTimeout(debounceTimer);
+
+        if (query.length < 2) {
+            resultsContainer.innerHTML = '<div class="py-4 text-center text-slate-400 text-[11px]">한글 종목명을 2글자 이상 입력하세요</div>';
+            return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+            resultsContainer.innerHTML = '<div class="py-4 text-center text-blue-600 text-[11px]"><i class="fa-solid fa-spinner fa-spin mr-1"></i>네이버에서 검색 중...</div>';
+
+            try {
+                const res = await fetch(`/api/search-stock?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || '검색 실패');
+                }
+
+                const items = data.items || [];
+                if (items.length === 0) {
+                    resultsContainer.innerHTML = '<div class="py-4 text-center text-slate-400 text-[11px]">검색 결과가 없습니다.</div>';
+                    return;
+                }
+
+                resultsContainer.innerHTML = items.map(item => `
+                    <div class="stock-search-item px-2.5 py-2 hover:bg-blue-50 cursor-pointer rounded-lg flex items-center justify-between transition"
+                         data-ticker="${item.ticker}" data-name="${item.name}">
+                        <div class="flex items-center gap-1.5 overflow-hidden">
+                            <span class="font-bold text-slate-800 truncate">${item.name}</span>
+                            <span class="text-[10px] text-slate-400 font-mono">(${item.ticker})</span>
+                        </div>
+                        <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">${item.market}</span>
+                    </div>
+                `).join('');
+
+                // 검색 목록 아이템 클릭 시 콤보박스에 반영
+                const itemElements = resultsContainer.querySelectorAll('.stock-search-item');
+                itemElements.forEach(el => {
+                    el.addEventListener('click', () => {
+                        const ticker = el.dataset.ticker;
+                        const name = el.dataset.name;
+
+                        if (hiddenStockName) hiddenStockName.value = name;
+
+                        // 콤보박스에 이미 존재하는지 검사
+                        let foundOption = false;
+                        for (let i = 0; i < stockSelect.options.length; i++) {
+                            if (stockSelect.options[i].value === ticker) {
+                                stockSelect.selectedIndex = i;
+                                foundOption = true;
+                                break;
+                            }
+                        }
+
+                        // 없는 경우 새 옵션으로 콤보박스 상단에 즉시 생성 후 선택
+                        if (!foundOption) {
+                            const newOption = document.createElement('option');
+                            newOption.value = ticker;
+                            newOption.textContent = `${name} (${ticker}) [신규]`;
+                            stockSelect.appendChild(newOption);
+                            stockSelect.value = ticker;
+                        }
+
+                        closeSearchPanel();
+                    });
+                });
+
+            } catch (err) {
+                resultsContainer.innerHTML = `<div class="py-4 text-center text-red-500 text-[11px]">검색 오류: ${err.message}</div>`;
+            }
+        }, 300);
+    });
+}
+
 function setupTxModal() {
     const modal = document.getElementById('txModal');
     const btnClose = document.getElementById('btnCloseTxModal');
@@ -328,6 +429,7 @@ function setupTxModal() {
     const submitBtn = document.getElementById('btnSubmitTx');
 
     const inputId = document.getElementById('txId');
+    const hiddenStockName = document.getElementById('txStockName');
     const inputDate = document.getElementById('txDate');
     const selectAcc = document.getElementById('txAccount');
     const selectType = document.getElementById('txType');
@@ -349,6 +451,8 @@ function setupTxModal() {
 
     const closeModal = () => {
         if (modal) modal.classList.add('hidden');
+        const searchPanel = document.getElementById('stockSearchPanel');
+        if (searchPanel) searchPanel.classList.add('hidden');
     };
     if (btnClose) btnClose.addEventListener('click', closeModal);
     if (btnCancel) btnCancel.addEventListener('click', closeModal);
@@ -357,6 +461,7 @@ function setupTxModal() {
         if (e.target.closest('#btnOpenTxModal')) {
             if (form) form.reset();
             if (inputId) inputId.value = '';
+            if (hiddenStockName) hiddenStockName.value = '';
             if (inputDate) inputDate.value = new Date().toISOString().split('T')[0];
             if (inputTax) inputTax.value = '0';
             if (modalTitle) modalTitle.textContent = '거래내역 직접 입력';
@@ -374,6 +479,7 @@ function setupTxModal() {
             try {
                 const item = JSON.parse(row.dataset.tx);
                 if (inputId) inputId.value = item.trade_id;
+                if (hiddenStockName) hiddenStockName.value = item.display_asset_name || '';
                 if (inputDate) inputDate.value = item.trade_date || '';
                 if (selectAcc) selectAcc.value = item.account_id || '';
                 if (selectType) selectType.value = item.trade_type || '매수';
@@ -400,6 +506,19 @@ function setupTxModal() {
         }
     });
 
+    // 수량 및 단가 입력 시 정산금액 자동 계산
+    const autoCalcAmount = () => {
+        if (['매수', '매도'].includes(selectType.value)) {
+            const q = Number(inputQty.value) || 0;
+            const p = Number(inputPrice.value) || 0;
+            if (q > 0 && p > 0) {
+                inputAmount.value = q * p;
+            }
+        }
+    };
+    if (inputQty) inputQty.addEventListener('input', autoCalcAmount);
+    if (inputPrice) inputPrice.addEventListener('input', autoCalcAmount);
+
     if (selectType) {
         selectType.addEventListener('change', toggleQtyAndPriceFields);
     }
@@ -414,12 +533,21 @@ function setupTxModal() {
                 submitBtn.textContent = isEdit ? '수정 중...' : '저장 중...';
             }
 
+            // 선택된 콤보박스의 한글 종목명 추출
+            let selectedStockName = '';
+            if (hiddenStockName && hiddenStockName.value) {
+                selectedStockName = hiddenStockName.value;
+            } else if (selectStock && selectStock.selectedOptions.length > 0) {
+                selectedStockName = selectStock.selectedOptions[0].text.split('(')[0].trim();
+            }
+
             const payload = {
                 trade_id: inputId.value ? Number(inputId.value) : undefined,
                 trade_date: inputDate.value,
                 account_id: selectAcc.value,
                 trade_type: selectType.value,
                 ticker: selectStock.value,
+                stock_name: selectedStockName,
                 quantity: inputQty.value ? Number(inputQty.value) : 0,
                 unit_price: inputPrice.value ? Number(inputPrice.value) : 0,
                 settle_amount: Number(inputAmount.value || 0),
@@ -486,7 +614,6 @@ function setupTxModal() {
     }
 }
 
-// 브라우저 클라이언트 OCR 엔진 및 텍스트 자동 파싱
 function setupOcrEngine() {
     const fileInput = document.getElementById('ocrFileInput');
     if (!fileInput) return;
@@ -672,18 +799,15 @@ function populateFieldsFromOcr(rawText) {
     toggleQtyAndPriceFields();
 }
 
-// 💡 공포탐욕지수 규격 동기화 버튼 (모바일 1차 팝업 / 2차 동기화 / 2초 자동 닫힘 완벽 적용)
 function setupSyncPriceButton() {
     const btn = document.getElementById('btnSyncPrices');
     const icon = document.getElementById('syncIcon');
     const tooltip = document.getElementById('syncTooltip');
-    const timeEl = document.getElementById('syncTooltipTime');
     if (!btn || !tooltip) return;
 
     let tooltipTimeout = null;
     let isTooltipVisible = false;
 
-    // 저장된 마지막 동기화 시각 화면 반영
     const updateTooltipText = (savedTime) => {
         updateSyncTooltipDisplay(savedTime);
     };
@@ -696,7 +820,6 @@ function setupSyncPriceButton() {
         isTooltipVisible = true;
 
         if (tooltipTimeout) clearTimeout(tooltipTimeout);
-        // 정확히 2초 후 자동 닫힘
         tooltipTimeout = setTimeout(() => {
             hideTooltip();
         }, 2000);
@@ -711,7 +834,6 @@ function setupSyncPriceButton() {
         }
     };
 
-    // 실제 동기화 실행 (주가 갱신 + 당일 스냅샷 동시 트리거)
     const executeSyncAction = async () => {
         btn.disabled = true;
         if (icon) icon.classList.add('fa-spin', 'text-blue-500');
@@ -720,7 +842,6 @@ function setupSyncPriceButton() {
             const res = await fetch('/api/sync-prices', { method: 'POST' });
             const result = await res.json();
 
-            // 당일 자산 스냅샷도 백그라운드에서 함께 즉시 기록
             fetch('/api/snapshot-daily', { method: 'POST' }).catch(() => {});
 
             if (result.success) {
@@ -730,7 +851,6 @@ function setupSyncPriceButton() {
                 const currentSyncTime = formatKstDateTime(result.updatedAt);
                 updateSyncTooltipDisplay(currentSyncTime);
 
-                // 동기화 완료 후 갱신된 시간을 2초간 띄워줌
                 showTooltip();
                 await fetchD1Portfolio();
             }
@@ -742,7 +862,6 @@ function setupSyncPriceButton() {
         }
     };
 
-    // 1) PC 환경: 마우스 올리면 팝업 노출, 떼면 닫힘
     btn.addEventListener('mouseenter', () => {
         if (!window.matchMedia('(pointer: coarse)').matches) {
             showTooltip();
@@ -755,7 +874,6 @@ function setupSyncPriceButton() {
         }
     });
 
-    // 2) 클릭 인터랙션 (PC와 모바일 완벽 분기)
     btn.addEventListener('click', async (e) => {
         e.stopPropagation();
 
@@ -763,22 +881,18 @@ function setupSyncPriceButton() {
 
         if (isMobileTouch) {
             if (!isTooltipVisible) {
-                // [모바일 1차 터치]: 팝업창만 띄우고 동기화는 절대 실행하지 않음!
                 showTooltip();
                 return;
             } else {
-                // [모바일 2차 터치]: 팝업이 띄워져 있는 상태에서 다시 눌렀을 때만 동기화 시작!
                 hideTooltip();
                 await executeSyncAction();
                 return;
             }
         }
 
-        // PC 환경: 클릭 즉시 동기화 실행
         await executeSyncAction();
     });
 
-    // 3) 모바일/PC 공통: 팝업 외부 영역 클릭 시 즉시 닫기
     document.addEventListener('click', (e) => {
         if (!btn.contains(e.target) && !tooltip.contains(e.target)) {
             hideTooltip();
@@ -797,6 +911,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupTabButtons();
     setupSyncPriceButton();
+    setupStockSearchEngine();
     setupTxModal();
     setupOcrEngine();
     fetchD1Portfolio();

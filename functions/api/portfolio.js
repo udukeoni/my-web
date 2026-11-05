@@ -1,5 +1,5 @@
 // functions/api/portfolio.js
-// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 회계 + 밴드 배율(하한 x0.8, 상한 x1.2) 백엔드 자동 연산 + 서버 기준 공통 동기화 시간(lastSyncTime) 반환
+// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 회계 + 밴드 배율(하한 x0.8, 상한 x1.2) 백엔드 자동 연산 + 자산 스냅샷 고유 동기화 시간(daily_snapshots.updated_at) 독립 연동
 
 export async function onRequestGet(context) {
     const { request, env } = context;
@@ -172,7 +172,6 @@ export async function onRequestGet(context) {
             (rebRes.results || []).forEach(r => {
                 rebalanceSettingsMap.set(`${r.account_id}_${r.ticker}`, r);
                 if (r.ticker === 'CASH') {
-                    // 💡 예수금도 밴드 배율 공식(x0.8, x1.2)으로 보정
                     const cTarget = Number(r.target_weight);
                     rebalanceCashSetting = {
                         ...r,
@@ -185,7 +184,7 @@ export async function onRequestGet(context) {
             console.error("리밸런싱 설정 조회 예외:", rebErr.message);
         }
 
-        // 종목별 비중 및 밴드리밸런싱 자동 연산 (💡 DB의 옛날 값 대신 x0.8, x1.2 배율 공식 적용)
+        // 종목별 비중 및 밴드리밸런싱 자동 연산
         const holdingsWithWeight = holdings.map(item => {
             const currentEval = item.eval_amount || 0;
             const currentWeight = netWorth > 0 ? Number(((currentEval / netWorth) * 100).toFixed(2)) : 0;
@@ -202,7 +201,6 @@ export async function onRequestGet(context) {
 
             if (setting) {
                 targetWeight = Number(setting.target_weight);
-                // 💡 엑셀 원본 공식: 밴드하한 = 목표비중 x 0.8, 밴드상한 = 목표비중 x 1.2
                 bandMin = Number((targetWeight * 0.8).toFixed(2));
                 bandMax = Number((targetWeight * 1.2).toFixed(2));
 
@@ -247,12 +245,15 @@ export async function onRequestGet(context) {
             console.error("차트 데이터 조회 에러:", chartErr.message);
         }
 
-        // 8. 💡 서버 DB 기준 최신 동기화 일시 조회 (공포탐욕지수/fgi_data 또는 최신 거래일시 연동)
-        let serverSyncTime = new Date().toISOString();
+        // 8. 💡 자산 스냅샷 고유 동기화 일시(daily_snapshots.updated_at) 단독 조회
+        let serverSyncTime = null;
         try {
-            const fgiTimeRes = await db.prepare("SELECT updated_at FROM fgi_data ORDER BY date DESC LIMIT 1").first();
-            if (fgiTimeRes && fgiTimeRes.updated_at) {
-                serverSyncTime = fgiTimeRes.updated_at;
+            const snapshotTimeRes = await db.prepare(
+                "SELECT updated_at FROM daily_snapshots WHERE updated_at IS NOT NULL ORDER BY snapshot_date DESC, updated_at DESC LIMIT 1"
+            ).first();
+            
+            if (snapshotTimeRes && snapshotTimeRes.updated_at) {
+                serverSyncTime = snapshotTimeRes.updated_at;
             }
         } catch (_) {}
 

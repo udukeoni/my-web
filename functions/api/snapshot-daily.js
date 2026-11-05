@@ -1,4 +1,5 @@
 // functions/api/snapshot-daily.js
+// 전체 계좌(ALL) 및 개별 계좌별 당일 자산 스냅샷 db.batch 일괄 생성 + total_buy_amount 1원 단위 정합성 + updated_at 고유 타임스탬프 기록
 
 export async function onRequestPost(context) {
     const { env } = context;
@@ -6,17 +7,25 @@ export async function onRequestPost(context) {
     try {
         const db = env.DB;
 
-        // 1. 현재 한국 시간(KST) 기준 날짜(YYYY-MM-DD) 구하기
+        // 1. 한국 시간(KST) 기준 날짜(YYYY-MM-DD) 및 타임스탬프(YYYY-MM-DD HH:mm:ss) 생성
         const now = new Date();
         const kstTime = new Date(now.getTime() + (9 * 60 * 60 * 1000));
         const dateStr = kstTime.toISOString().split('T')[0];
+        
+        const pad = (n) => String(n).padStart(2, '0');
+        const kstDateTimeStr = `${kstTime.getFullYear()}-${pad(kstTime.getMonth() + 1)}-${pad(kstTime.getDate())} ${pad(kstTime.getHours())}:${pad(kstTime.getMinutes())}:${pad(kstTime.getSeconds())}`;
 
-        // 2. 각 계좌별 현재 보유 주식 평가금 및 총 매입원가 집계
+        // 2. 각 계좌별 보유 주식 평가금 및 총 매입원가(total_buy_amount 우선) 집계
         const accHoldings = await db.prepare(`
             SELECT 
                 h.account_id,
-                SUM(h.quantity * h.avg_buy_price) as invested,
-                SUM(h.quantity * a.current_price) as stock_eval
+                SUM(
+                    CASE 
+                        WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
+                        ELSE ROUND(h.quantity * h.avg_buy_price) 
+                    END
+                ) as invested,
+                SUM(ROUND(h.quantity * a.current_price)) as stock_eval
             FROM holdings h
             JOIN assets a ON h.ticker = a.ticker
             GROUP BY h.account_id
@@ -31,8 +40,8 @@ export async function onRequestPost(context) {
 
         (accHoldings.results || []).forEach(h => {
             if (accMap[h.account_id]) {
-                accMap[h.account_id].invested = h.invested || 0;
-                accMap[h.account_id].stock_eval = h.stock_eval || 0;
+                accMap[h.account_id].invested = Math.round(h.invested || 0);
+                accMap[h.account_id].stock_eval = Math.round(h.stock_eval || 0);
             }
         });
 
@@ -40,7 +49,7 @@ export async function onRequestPost(context) {
         let totalNetWorth = 0;
         const statements = [];
 
-        // 4. 개별 계좌 최종 일별 스냅샷 생성 (당일 중복 실행 시 덮어쓰기)
+        // 4. 개별 계좌 최종 일별 스냅샷 생성 (당일 중복 실행 시 updated_at 포함 갱신)
         for (const [accId, info] of Object.entries(accMap)) {
             const accNetWorth = info.stock_eval + info.cash;
             const accTotalInvested = info.invested + info.cash;
@@ -49,27 +58,29 @@ export async function onRequestPost(context) {
 
             statements.push(
                 db.prepare(`
-                    INSERT INTO daily_snapshots (snapshot_date, account_id, invested, net_worth)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO daily_snapshots (snapshot_date, account_id, invested, net_worth, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
                     ON CONFLICT(snapshot_date, account_id) DO UPDATE SET
                         invested = excluded.invested,
-                        net_worth = excluded.net_worth
-                `).bind(dateStr, accId, accTotalInvested, accNetWorth)
+                        net_worth = excluded.net_worth,
+                        updated_at = excluded.updated_at
+                `).bind(dateStr, accId, accTotalInvested, accNetWorth, kstDateTimeStr)
             );
         }
 
         // 5. 전체 계좌 종합('ALL') 최종 일별 스냅샷 생성
         statements.push(
             db.prepare(`
-                INSERT INTO daily_snapshots (snapshot_date, account_id, invested, net_worth)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO daily_snapshots (snapshot_date, account_id, invested, net_worth, updated_at)
+                VALUES (?, 'ALL', ?, ?, ?)
                 ON CONFLICT(snapshot_date, account_id) DO UPDATE SET
                     invested = excluded.invested,
-                    net_worth = excluded.net_worth
-            `).bind(dateStr, 'ALL', totalInvested, totalNetWorth)
+                    net_worth = excluded.net_worth,
+                    updated_at = excluded.updated_at
+            `).bind(dateStr, 'ALL', totalInvested, totalNetWorth, kstDateTimeStr)
         );
 
-        // 6. 일괄 실행
+        // 6. 원본 방식 그대로 db.batch 일괄 실행 (안전한 원자적 저장)
         if (statements.length > 0) {
             await db.batch(statements);
         }
@@ -78,6 +89,7 @@ export async function onRequestPost(context) {
             success: true,
             message: `${dateStr} 일별 최종 자산 스냅샷 영구 저장 완료`,
             date: dateStr,
+            updatedAt: kstDateTimeStr,
             totalNetWorth,
             totalInvested
         }), {

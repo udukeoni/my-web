@@ -49,10 +49,10 @@ export async function onRequestPost(context) {
         let totalNetWorth = 0;
         const statements = [];
 
-        // 4. 개별 계좌 최종 일별 스냅샷 생성 (당일 중복 실행 시 updated_at 포함 갱신)
+        // 4. 개별 계좌 최종 일별 스냅샷 생성 (물음표 5개, bind 값 5개 일치)
         for (const [accId, info] of Object.entries(accMap)) {
-            const accNetWorth = info.stock_eval + info.cash;
-            const accTotalInvested = info.invested + info.cash;
+            const accNetWorth = Math.round(info.stock_eval + info.cash);
+            const accTotalInvested = Math.round(info.invested + info.cash);
             totalInvested += accTotalInvested;
             totalNetWorth += accNetWorth;
 
@@ -64,20 +64,20 @@ export async function onRequestPost(context) {
                         invested = excluded.invested,
                         net_worth = excluded.net_worth,
                         updated_at = excluded.updated_at
-                `).bind(dateStr, accId, accTotalInvested, accNetWorth, kstDateTimeStr)
+                `).bind(dateStr, String(accId), Number(accTotalInvested), Number(accNetWorth), String(kstDateTimeStr))
             );
         }
 
-        // 5. 전체 계좌 종합('ALL') 최종 일별 스냅샷 생성
+        // 5. 전체 계좌 종합('ALL') 최종 일별 스냅샷 생성 (물음표 5개, bind 값 5개 완벽 일치)
         statements.push(
             db.prepare(`
                 INSERT INTO daily_snapshots (snapshot_date, account_id, invested, net_worth, updated_at)
-                VALUES (?, 'ALL', ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(snapshot_date, account_id) DO UPDATE SET
                     invested = excluded.invested,
                     net_worth = excluded.net_worth,
                     updated_at = excluded.updated_at
-            `).bind(dateStr, 'ALL', totalInvested, totalNetWorth, kstDateTimeStr)
+            `).bind(dateStr, 'ALL', Number(totalInvested), Number(totalNetWorth), String(kstDateTimeStr))
         );
 
         // 6. 원본 방식 그대로 db.batch 일괄 실행 (안전한 원자적 저장)

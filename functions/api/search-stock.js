@@ -14,7 +14,7 @@ export async function onRequestGet(context) {
     }
 
     try {
-        // 네이버 증권 공식 실시간 종목 검색/자동완성 전용 엔드포인트
+        // 네이버 증권 공식 자동완성 API 호출
         const naverAcUrl = `https://ac.stock.naver.com/ac?q=${encodeURIComponent(query)}&target=stock,index,ipo&q_enc=utf-8&r_enc=utf-8&st=111`;
         
         const res = await fetch(naverAcUrl, {
@@ -30,23 +30,46 @@ export async function onRequestGet(context) {
 
         const data = await res.json();
         
-        // 네이버 ac 서버 응답 규격: data.items[0] 배열 안에 [[코드, 종목명, 시장명, ...], ...] 형태로 전달됨
-        const rawList = (data.items && data.items[0]) ? data.items[0] : [];
+        // 💡 [핵심 방어 코드] 어떤 중첩 배열 형태가 오더라도 1차원 목록으로 안전하게 추출
+        let rawList = [];
+        if (data && Array.isArray(data.items)) {
+            if (data.items.length > 0 && Array.isArray(data.items[0])) {
+                rawList = data.items[0];
+            } else {
+                rawList = data.items;
+            }
+        }
 
-        const items = rawList
-            .map(row => {
-                // row: ["종목명", "종목코드", "시장명(KOSPI/KOSDAQ 등)", ...]
-                const name = Array.isArray(row) ? row[0] : (row.name || '');
-                const code = Array.isArray(row) ? row[1] : (row.code || '');
-                const market = Array.isArray(row) ? (row[2] || '국내') : (row.market || '국내');
+        const items = [];
+        if (Array.isArray(rawList)) {
+            for (const row of rawList) {
+                let name = '';
+                let code = '';
+                let market = '국내';
 
-                return {
-                    ticker: String(code).trim().toUpperCase(),
-                    name: String(name).trim(),
-                    market: String(market).trim()
-                };
-            })
-            .filter(item => item.ticker && item.name);
+                if (Array.isArray(row)) {
+                    // 네이버 기본 배열 포맷: [종목명, 종목코드, 시장구분, ...]
+                    name = row[0] || '';
+                    code = row[1] || '';
+                    market = row[2] || '국내';
+                } else if (typeof row === 'object' && row !== null) {
+                    name = row.name || row.stockName || '';
+                    code = row.code || row.ticker || row.itemCode || '';
+                    market = row.market || row.marketName || '국내';
+                }
+
+                const cleanTicker = String(code).trim().toUpperCase();
+                const cleanName = String(name).trim();
+
+                if (cleanTicker && cleanName) {
+                    items.push({
+                        ticker: cleanTicker,
+                        name: cleanName,
+                        market: String(market).trim()
+                    });
+                }
+            }
+        }
 
         return new Response(JSON.stringify({
             success: true,

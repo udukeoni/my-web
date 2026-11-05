@@ -14,7 +14,7 @@ export async function onRequestGet(context) {
     }
 
     try {
-        // 네이버 증권 공식 통합 검색 API (국내 주식 및 ETF 지원)
+        // 네이버 증권 공식 자동완성/검색 API
         const naverSearchUrl = `https://m.stock.naver.com/front-api/v1/search/auto-complete?keyword=${encodeURIComponent(query)}`;
         
         const res = await fetch(naverSearchUrl, {
@@ -30,7 +30,7 @@ export async function onRequestGet(context) {
 
         const data = await res.json();
         
-        // 네이버 검색 응답 트리 추출 (auto-complete 규격 및 레거시 searchList 대응)
+        // 네이버 검색 응답 트리 추출 (auto-complete 트리 및 다중 규격 대응)
         let searchList = [];
         if (data.result && Array.isArray(data.result.searchList)) {
             searchList = data.result.searchList;
@@ -38,6 +38,8 @@ export async function onRequestGet(context) {
             searchList = data.items;
         } else if (data.result && Array.isArray(data.result.items)) {
             searchList = data.result.items;
+        } else if (data.result && data.result.stockList && Array.isArray(data.result.stockList)) {
+            searchList = data.result.stockList;
         }
 
         const items = searchList

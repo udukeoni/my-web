@@ -37,18 +37,33 @@ function calculateTotalTargetWeight() {
 }
 
 function updateTargetHeaderLiveSum() {
-    const btn = document.getElementById('btnToggleTargetEdit');
-    if (!btn || !isTargetWeightEditMode) return;
-
     const total = calculateTotalTargetWeight();
-    btn.textContent = `목표비중(${total})`;
 
-    if (Math.abs(total - 100) < 0.05) {
-        btn.className = 'py-2 px-2 text-right cursor-pointer transition select-none bg-emerald-200 text-emerald-950 font-black ring-1 ring-inset ring-emerald-500';
-        btn.title = `합계: ${total}% (클릭 시 비중 저장 및 적용)`;
-    } else {
-        btn.className = 'py-2 px-2 text-right cursor-pointer transition select-none bg-amber-200 text-amber-950 font-black ring-1 ring-inset ring-amber-500';
-        btn.title = `현재 합계: ${total}% (100%에 맞춰 조절 후 클릭하여 저장)`;
+    // PC 헤더 버튼 갱신
+    const btn = document.getElementById('btnToggleTargetEdit');
+    if (btn && isTargetWeightEditMode) {
+        btn.textContent = `목표비중(${total})`;
+        if (Math.abs(total - 100) < 0.05) {
+            btn.className = 'py-2 px-2 text-right cursor-pointer transition select-none bg-emerald-200 text-emerald-950 font-black ring-1 ring-inset ring-emerald-500';
+            btn.title = `합계: ${total}% (클릭 시 비중 저장 및 적용)`;
+        } else {
+            btn.className = 'py-2 px-2 text-right cursor-pointer transition select-none bg-amber-200 text-amber-950 font-black ring-1 ring-inset ring-amber-500';
+            btn.title = `현재 합계: ${total}% (100%에 맞춰 조절 후 클릭하여 저장)`;
+        }
+    }
+
+    // 모바일 전용 저장 바 갱신
+    const mobileSaveBtn = document.getElementById('btnMobileSaveTargetWeight');
+    const mobileSumSpan = document.getElementById('mobileTargetWeightSum');
+    if (mobileSumSpan) mobileSumSpan.textContent = `${total}%`;
+    if (mobileSaveBtn) {
+        if (Math.abs(total - 100) < 0.05) {
+            mobileSaveBtn.className = 'w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-between shadow-sm active:scale-95 transition';
+            mobileSaveBtn.disabled = false;
+        } else {
+            mobileSaveBtn.className = 'w-full py-2 px-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center justify-between shadow-sm active:scale-95 transition';
+            mobileSaveBtn.disabled = false;
+        }
     }
 }
 
@@ -269,7 +284,7 @@ function renderDataTable(viewType, dataList) {
     updatePaginationControls();
 
     if (isTargetWeightEditMode) {
-        const inputs = tbody.querySelectorAll('.target-weight-input');
+        const inputs = document.querySelectorAll('.target-weight-input');
         inputs.forEach(inp => {
             inp.addEventListener('input', () => {
                 updateTargetHeaderLiveSum();
@@ -368,6 +383,7 @@ function renderPaginatedRows() {
         if (isSupported && isRebalanceExpanded) {
             calculateSmartRebalance(currentDataList);
 
+            // PC 테이블 행 렌더링
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -450,8 +466,22 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 모바일 밴드리밸런싱 확장 카드 뷰
-            mobileList.innerHTML = pageItems.map(item => {
+            // 💡 [모바일 밴드리밸런싱 카드 뷰: 실시간 편집 입력 지원]
+            const initialTotal = calculateTotalTargetWeight();
+            let mobileHeaderHtml = '';
+            
+            if (isTargetWeightEditMode) {
+                mobileHeaderHtml = `
+                    <div class="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl mb-2 flex flex-col gap-2">
+                        <button type="button" id="btnMobileSaveTargetWeight" class="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-between shadow-sm active:scale-95 transition">
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-floppy-disk"></i> 목표비중 저장 및 적용</span>
+                            <span id="mobileTargetWeightSum" class="font-mono bg-emerald-800/40 px-2 py-0.5 rounded text-[11px]">${initialTotal}%</span>
+                        </button>
+                    </div>
+                `;
+            }
+
+            const mobileCardsHtml = pageItems.map(item => {
                 const hasTarget = (item.target_weight !== null && item.target_weight !== undefined && !isNaN(item.target_weight) && Number(item.target_weight) > 0);
                 const targetW = hasTarget ? Number(item.target_weight) : null;
                 const dynamicBandMin = targetW !== null ? Number((targetW * 0.8).toFixed(1)) : 0;
@@ -486,10 +516,34 @@ function renderPaginatedRows() {
 
                 const bandText = hasTarget ? `밴드 ${dynamicBandMin}% ~ ${dynamicBandMax}%` : '밴드 미설정';
 
+                // 모바일 목표비중 영역 (편집 모드 시 입력창 표시)
+                let mobileTargetArea = '';
+                if (isTargetWeightEditMode) {
+                    const currentTargetVal = targetW !== null ? targetW : '';
+                    mobileTargetArea = `
+                        <div class="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-300">
+                            <span class="text-[10px] text-emerald-800 font-bold">목표:</span>
+                            <input type="number" step="0.1" min="0" max="100" 
+                                   data-ticker="${item.ticker}" 
+                                   value="${currentTargetVal}" 
+                                   placeholder="0"
+                                   class="target-weight-input w-12 border border-emerald-400 rounded px-1 py-0.5 text-right font-mono font-bold text-emerald-950 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs" />
+                            <span class="text-[10px] text-emerald-700 font-bold">%</span>
+                        </div>
+                    `;
+                } else {
+                    mobileTargetArea = `
+                        <button type="button" class="mobile-target-edit-trigger font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded text-[11px] flex items-center gap-1 transition active:scale-95" title="터치 시 목표비중 편집">
+                            <span>목표 ${hasTarget ? item.target_weight + '%' : '-'}</span>
+                            <i class="fa-solid fa-pen text-[9px] opacity-60"></i>
+                        </button>
+                    `;
+                }
+
                 return `
                     <div class="py-2.5 px-3 bg-white border-b border-slate-100 text-xs">
                         <div class="flex justify-between items-center mb-1.5">
-                            <div class="font-bold text-slate-900 truncate max-w-[190px]">${item.asset_name}</div>
+                            <div class="font-bold text-slate-900 truncate max-w-[170px]">${item.asset_name}</div>
                             <div class="flex items-center gap-1.5">
                                 <span class="mobile-rebalance-toggle-btn cursor-pointer font-mono font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded text-[11px] active:scale-95 transition" title="터치 시 기본 화면으로 축소">
                                     ${item.weight}% <i class="fa-solid fa-compress text-[9px]"></i>
@@ -499,7 +553,7 @@ function renderPaginatedRows() {
                         </div>
                         <div class="flex justify-between items-center text-[11px] mb-1">
                             <span class="text-slate-500">평가 ₩${Number(item.eval_amount).toLocaleString()}</span>
-                            <span class="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">목표 ${hasTarget ? item.target_weight + '%' : '-'}</span>
+                            ${mobileTargetArea}
                         </div>
                         <div class="flex justify-between items-center text-[11px] pt-1 border-t border-slate-50">
                             <span class="text-slate-400">${bandText}</span>
@@ -508,6 +562,8 @@ function renderPaginatedRows() {
                     </div>
                 `;
             }).join('');
+
+            mobileList.innerHTML = mobileHeaderHtml + mobileCardsHtml;
 
             // 모바일 밴드리밸런싱 축소 토글 이벤트
             const rebCloseBtns = mobileList.querySelectorAll('.mobile-rebalance-toggle-btn');
@@ -520,7 +576,27 @@ function renderPaginatedRows() {
                 });
             });
 
+            // 모바일 목표비중 편집 모드 진입 이벤트
+            const editTriggers = mobileList.querySelectorAll('.mobile-target-edit-trigger');
+            editTriggers.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    isTargetWeightEditMode = true;
+                    renderDataTable('HOLDINGS', currentDataList);
+                });
+            });
+
+            // 모바일 목표비중 저장 버튼 이벤트
+            const mobileSaveBtn = document.getElementById('btnMobileSaveTargetWeight');
+            if (mobileSaveBtn) {
+                mobileSaveBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await saveTargetWeightsAndRecalculate();
+                });
+            }
+
         } else {
+            // 기본 모드 PC 행
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -542,7 +618,7 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 기본 모바일 카드 뷰
+            // 기본 모드 모바일 카드
             mobileList.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
@@ -569,7 +645,6 @@ function renderPaginatedRows() {
                     profitHtml = `<span class="font-bold ${profitColor}">${sign}₩${Number(item.profit_amount).toLocaleString()}</span>`;
                 }
 
-                // 💡 [핵심 복구] 미래-연금, 삼성-ISA 계좌일 경우 비중에 ⛶ 아이콘과 터치 트리거 부여
                 const weightBadgeHtml = isSupported 
                     ? `<div class="mobile-rebalance-open-btn cursor-pointer font-mono font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded text-[11px] flex items-center gap-1 active:scale-95 transition" title="터치 시 자산배분 밴드리밸런싱 분석 확장">
                          <span>${item.weight}%</span>
@@ -595,7 +670,6 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 모바일 밴드리밸런싱 확장 이벤트 연결
             const rebOpenBtns = mobileList.querySelectorAll('.mobile-rebalance-open-btn');
             rebOpenBtns.forEach(btn => {
                 btn.addEventListener('click', (e) => {

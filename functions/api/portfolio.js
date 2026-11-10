@@ -105,7 +105,7 @@ export async function onRequestGet(context) {
                 holdingsQuery += " AND h.account_id = ?";
                 holdingsParams.push(accountFilter);
             } else if (accountFilter !== 'ALL') {
-                holdingsQuery += " AND 1=0"; // 본인 계좌가 아니면 빈 결과 반환
+                holdingsQuery += " AND 1=0";
             }
             holdingsQuery += " ORDER BY eval_amount DESC";
 
@@ -260,14 +260,35 @@ export async function onRequestGet(context) {
             };
         });
 
-        // 💡 7. 일별 자산 추이 스냅샷 (antmaster84 관리자는 ALL 전체 기록, 일반 회원은 개별 계좌 데이터 우선)
+        // 💡 7. [핵심 수정] 일별 자산 추이 스냅샷 격리
+        // 관리자(antmaster84)에게만 과거 'ALL' 종합 스냅샷을 보여주고,
+        // 신규 일반 회원은 오직 본인이 보유한 계좌 ID의 스냅샷만 조회하도록 분기 처리 (관리자 데이터 유출 원천 차단)
         let dailyHistory = [];
         try {
-            const targetSnapAccount = (currentUserId === 'antmaster84' && accountFilter === 'ALL') ? 'ALL' : accountFilter;
-            const dailyQuery = "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = ? ORDER BY snapshot_date ASC";
-            const dailyStmt = db.prepare(dailyQuery);
-            const dailyRes = await dailyStmt.bind(targetSnapAccount).all();
-            dailyHistory = dailyRes.results || [];
+            if (currentUserId === 'antmaster84') {
+                const targetSnapAccount = (accountFilter === 'ALL') ? 'ALL' : accountFilter;
+                const dailyQuery = "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = ? ORDER BY snapshot_date ASC";
+                const dailyRes = await db.prepare(dailyQuery).bind(targetSnapAccount).all();
+                dailyHistory = dailyRes.results || [];
+            } else {
+                // 일반 회원의 경우: 본인 소유 계좌 중 선택된 계좌 또는 소유 계좌들의 스냅샷만 조회
+                if (accountFilter !== 'ALL' && allowedAccountIds.includes(accountFilter)) {
+                    const dailyQuery = "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = ? ORDER BY snapshot_date ASC";
+                    const dailyRes = await db.prepare(dailyQuery).bind(accountFilter).all();
+                    dailyHistory = dailyRes.results || [];
+                } else if (allowedAccountIds.length > 0) {
+                    const placeholders = allowedAccountIds.map(() => '?').join(',');
+                    const dailyQuery = `
+                        SELECT snapshot_date, SUM(net_worth) as net_worth, SUM(invested) as invested 
+                        FROM daily_snapshots 
+                        WHERE account_id IN (${placeholders}) 
+                        GROUP BY snapshot_date 
+                        ORDER BY snapshot_date ASC
+                    `;
+                    const dailyRes = await db.prepare(dailyQuery).bind(...allowedAccountIds).all();
+                    dailyHistory = dailyRes.results || [];
+                }
+            }
         } catch (chartErr) {
             console.error("차트 데이터 조회 에러:", chartErr.message);
         }

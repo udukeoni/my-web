@@ -1,6 +1,4 @@
 // port/js/components/assetListTable.js
-// 스프레드시트형 밴드리밸런싱 스마트 뷰어 (미래-연금 & 삼성-ISA 지원, 턱걸이 복귀법 매수 순위 + 초기 계좌 빈 목표비중 모드)
-
 const BASE_FIXED_TRADE_ID = 0;
 
 let currentPage = 1;
@@ -8,16 +6,12 @@ let pageSize = 10;
 let currentViewType = 'HOLDINGS';
 let currentDataList = [];
 
-// 💡 리밸런싱 확장 토글 상태 플래그
 let isRebalanceExpanded = false;
-// 💡 목표비중 편집 모드 상태 플래그
 let isTargetWeightEditMode = false;
 
-// 💡 모바일 카드 토글 상태 관리
 const mobilePriceViewToggle = new Map();
 const mobileProfitViewToggle = new Map();
 
-// 💡 리밸런싱 지원 계좌 판별 헬퍼 (미래-연금, 삼성-ISA)
 function isRebalanceSupportedAccount(accId) {
     const acc = accId || (typeof currentAccount !== 'undefined' ? currentAccount : 'ALL');
     return acc === 'MIRAE_PENSION' || 
@@ -25,7 +19,6 @@ function isRebalanceSupportedAccount(accId) {
            (acc && (acc.includes('연금') || acc.includes('ISA')) && acc !== 'ALL');
 }
 
-// 💡 목표비중 입력값 전체 합산 계산 헬퍼 함수
 function calculateTotalTargetWeight() {
     const inputs = document.querySelectorAll('.target-weight-input');
     let total = 0;
@@ -43,7 +36,6 @@ function calculateTotalTargetWeight() {
     return parseFloat(total.toFixed(1));
 }
 
-// 💡 헤더의 목표비중 합계 텍스트 및 시각 상태 실시간 갱신 함수
 function updateTargetHeaderLiveSum() {
     const btn = document.getElementById('btnToggleTargetEdit');
     if (!btn || !isTargetWeightEditMode) return;
@@ -60,7 +52,6 @@ function updateTargetHeaderLiveSum() {
     }
 }
 
-// 💡 스마트 리밸런싱 상태 및 3번(밴드하한 턱걸이 탈출 비용) 우선순위 계산 헬퍼 함수
 function calculateSmartRebalance(items) {
     let totalNetWorth = 0;
     if (typeof cachedSummary !== 'undefined' && cachedSummary && cachedSummary.netWorth) {
@@ -82,7 +73,6 @@ function calculateSmartRebalance(items) {
 
         let initialStatus = '-';
 
-        // 목표비중이 등록되어 있을 때만 매수/매도/유지 상태 산출
         if (targetW !== null && dynamicBandMin !== null && dynamicBandMax !== null) {
             if (curWeight < dynamicBandMin) {
                 initialStatus = '매수';
@@ -101,7 +91,6 @@ function calculateSmartRebalance(items) {
         item._buyPriority = null;
         item._rescueCost = 0;
 
-        // 3번 턱걸이 복귀법: 밴드하한선(80%)까지만 끌어올리는 데 필요한 최소 비용 계산
         if (initialStatus === '매수' && dynamicBandMin !== null) {
             const minRequiredEval = totalNetWorth * (dynamicBandMin / 100.0);
             const rescueCost = Math.max(0, Math.round(minRequiredEval - curEval));
@@ -135,7 +124,6 @@ function renderDataTable(viewType, dataList) {
     pageSize = 10;
     currentDataList = dataList || [];
 
-    // 거래내역 입력 버튼 제어
     const headerContainer = title ? title.closest('.flex.items-center.justify-between') : null;
     let btnOpenModal = document.getElementById('btnOpenTxModal');
     if (headerContainer && !btnOpenModal) {
@@ -147,17 +135,12 @@ function renderDataTable(viewType, dataList) {
         headerContainer.appendChild(btnOpenModal);
     }
 
-    // ==========================================
-    // 1. 보유 종목 (HOLDINGS) 헤더 세팅
-    // ==========================================
     if (viewType === 'HOLDINGS') {
         const selectedAcc = (typeof currentAccount !== 'undefined') ? currentAccount : 'ALL';
         const isSupported = isRebalanceSupportedAccount(selectedAcc);
         const showWideRebalance = isSupported && isRebalanceExpanded;
 
-        if (title) {
-            title.textContent = showWideRebalance ? '자산배분 밴드리밸런싱 포트폴리오' : '보유 종목 상세';
-        }
+        if (title) title.textContent = showWideRebalance ? '자산배분 밴드리밸런싱 포트폴리오' : '보유 종목 상세';
         if (badge) badge.textContent = `${currentDataList.length}종목`;
 
         if (btnOpenModal) {
@@ -252,9 +235,6 @@ function renderDataTable(viewType, dataList) {
             });
         }
 
-    // ==========================================
-    // 2. 거래원장 헤더 세팅
-    // ==========================================
     } else {
         const titles = {
             ALL_LOGS: '전체 거래 내역',
@@ -299,7 +279,6 @@ function renderDataTable(viewType, dataList) {
     }
 }
 
-// 💡 목표비중 저장 및 D1 DB 반영 함수
 async function saveTargetWeightsAndRecalculate() {
     const inputs = document.querySelectorAll('.target-weight-input');
     const updates = [];
@@ -326,9 +305,7 @@ async function saveTargetWeightsAndRecalculate() {
             })
         });
         const result = await res.json();
-        if (!result.success) {
-            throw new Error(result.error || '목표비중 저장 실패');
-        }
+        if (!result.success) throw new Error(result.error || '목표비중 저장 실패');
 
         let totalNetWorth = 0;
         if (typeof cachedSummary !== 'undefined' && cachedSummary && cachedSummary.netWorth) {
@@ -415,7 +392,6 @@ function renderPaginatedRows() {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">🔴 매도</span>';
                 }
 
-                // 목표비중이 없으면 조정액 및 주식수 0 또는 초기화
                 let diffText = '₩0';
                 let adjText = '-';
 
@@ -474,7 +450,7 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // [모바일 카드 뷰 - 리밸런싱 모드]
+            // 모바일 밴드리밸런싱 확장 카드 뷰
             mobileList.innerHTML = pageItems.map(item => {
                 const hasTarget = (item.target_weight !== null && item.target_weight !== undefined && !isNaN(item.target_weight) && Number(item.target_weight) > 0);
                 const targetW = hasTarget ? Number(item.target_weight) : null;
@@ -514,10 +490,15 @@ function renderPaginatedRows() {
                     <div class="py-2.5 px-3 bg-white border-b border-slate-100 text-xs">
                         <div class="flex justify-between items-center mb-1.5">
                             <div class="font-bold text-slate-900 truncate max-w-[190px]">${item.asset_name}</div>
-                            <div>${statusBadge}</div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="mobile-rebalance-toggle-btn cursor-pointer font-mono font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded text-[11px] active:scale-95 transition" title="터치 시 기본 화면으로 축소">
+                                    ${item.weight}% <i class="fa-solid fa-compress text-[9px]"></i>
+                                </span>
+                                <div>${statusBadge}</div>
+                            </div>
                         </div>
                         <div class="flex justify-between items-center text-[11px] mb-1">
-                            <span class="text-slate-500">평가 ₩${Number(item.eval_amount).toLocaleString()} (${item.weight}%)</span>
+                            <span class="text-slate-500">평가 ₩${Number(item.eval_amount).toLocaleString()}</span>
                             <span class="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">목표 ${hasTarget ? item.target_weight + '%' : '-'}</span>
                         </div>
                         <div class="flex justify-between items-center text-[11px] pt-1 border-t border-slate-50">
@@ -528,8 +509,18 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
+            // 모바일 밴드리밸런싱 축소 토글 이벤트
+            const rebCloseBtns = mobileList.querySelectorAll('.mobile-rebalance-toggle-btn');
+            rebCloseBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    isRebalanceExpanded = false;
+                    isTargetWeightEditMode = false;
+                    renderDataTable('HOLDINGS', currentDataList);
+                });
+            });
+
         } else {
-            // [기본 상태]: 10개 열 순서 정렬 본문 렌더링
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -551,7 +542,7 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // [모바일 카드 뷰 - 인터랙션 토글 적용]
+            // 기본 모바일 카드 뷰
             mobileList.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
@@ -578,11 +569,19 @@ function renderPaginatedRows() {
                     profitHtml = `<span class="font-bold ${profitColor}">${sign}₩${Number(item.profit_amount).toLocaleString()}</span>`;
                 }
 
+                // 💡 [핵심 복구] 미래-연금, 삼성-ISA 계좌일 경우 비중에 ⛶ 아이콘과 터치 트리거 부여
+                const weightBadgeHtml = isSupported 
+                    ? `<div class="mobile-rebalance-open-btn cursor-pointer font-mono font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded text-[11px] flex items-center gap-1 active:scale-95 transition" title="터치 시 자산배분 밴드리밸런싱 분석 확장">
+                         <span>${item.weight}%</span>
+                         <i class="fa-solid fa-expand text-[9px] text-blue-500"></i>
+                       </div>`
+                    : `<div class="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">${item.weight}%</div>`;
+
                 return `
                     <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs select-none">
                         <div class="flex justify-between items-center mb-1">
                             <div class="font-bold text-slate-900 truncate max-w-[190px]">${item.asset_name}</div>
-                            <div class="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">${item.weight}%</div>
+                            ${weightBadgeHtml}
                         </div>
                         <div class="flex justify-between items-center text-[11px] text-slate-600">
                             <div class="mobile-price-toggle-btn cursor-pointer py-0.5 active:opacity-60 transition" data-ticker="${item.ticker}">
@@ -595,6 +594,16 @@ function renderPaginatedRows() {
                     </div>
                 `;
             }).join('');
+
+            // 모바일 밴드리밸런싱 확장 이벤트 연결
+            const rebOpenBtns = mobileList.querySelectorAll('.mobile-rebalance-open-btn');
+            rebOpenBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    isRebalanceExpanded = true;
+                    renderDataTable('HOLDINGS', currentDataList);
+                });
+            });
 
             const priceBtns = mobileList.querySelectorAll('.mobile-price-toggle-btn');
             priceBtns.forEach(btn => {
@@ -619,9 +628,6 @@ function renderPaginatedRows() {
             });
         }
 
-    // ==========================================
-    // 2. 거래원장 본문 세팅
-    // ==========================================
     } else {
         tbody.innerHTML = pageItems.map(item => {
             let badgeStyle = "bg-slate-100 text-slate-700";
@@ -714,9 +720,7 @@ function updatePaginationControls() {
 
     if (paginationBar) {
         const pageInfoContainer = paginationBar.querySelector('.flex.items-center.gap-1\\.5');
-        if (pageInfoContainer) {
-            pageInfoContainer.innerHTML = '';
-        }
+        if (pageInfoContainer) pageInfoContainer.innerHTML = '';
     }
 
     totalText.textContent = `/ ${totalPages} 페이지`;

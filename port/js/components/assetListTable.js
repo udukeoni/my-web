@@ -19,13 +19,38 @@ function isRebalanceSupportedAccount(accId) {
            (acc && (acc.includes('연금') || acc.includes('ISA')) && acc !== 'ALL');
 }
 
+// 💡 [중복 합산 방지 수정] PC 테이블과 모바일 카드가 동시에 인풋을 가질 때 중복으로 더해져 200%가 되던 버그 해결
 function calculateTotalTargetWeight() {
-    const inputs = document.querySelectorAll('.target-weight-input');
+    const mobileContainer = document.getElementById('mobileCardList');
+    const tableContainer = document.getElementById('tableBody');
+    
+    // 모바일 카드가 활성화되어 표시 중인 경우 모바일 인풋 우선 탐색, 없으면 PC 테이블 인풋 탐색
+    let inputs = [];
+    if (mobileContainer && window.getComputedStyle(mobileContainer).display !== 'none') {
+        inputs = mobileContainer.querySelectorAll('.target-weight-input');
+    }
+    if (!inputs || inputs.length === 0) {
+        if (tableContainer) {
+            inputs = tableContainer.querySelectorAll('.target-weight-input');
+        }
+    }
+    if (!inputs || inputs.length === 0) {
+        inputs = document.querySelectorAll('.target-weight-input');
+    }
+
     let total = 0;
     if (inputs.length > 0) {
+        // 동일 ticker가 중복 집계되지 않도록 Map으로 한 번 더 방어
+        const tickerMap = new Map();
         inputs.forEach(inp => {
+            const ticker = inp.dataset.ticker || Math.random().toString();
             const val = parseFloat(inp.value);
-            if (!isNaN(val)) total += val;
+            if (!isNaN(val)) {
+                tickerMap.set(ticker, val);
+            }
+        });
+        tickerMap.forEach(val => {
+            total += val;
         });
     } else {
         currentDataList.forEach(item => {
@@ -295,7 +320,22 @@ function renderDataTable(viewType, dataList) {
 }
 
 async function saveTargetWeightsAndRecalculate() {
-    const inputs = document.querySelectorAll('.target-weight-input');
+    const mobileContainer = document.getElementById('mobileCardList');
+    const tableContainer = document.getElementById('tableBody');
+    
+    let inputs = [];
+    if (mobileContainer && window.getComputedStyle(mobileContainer).display !== 'none') {
+        inputs = mobileContainer.querySelectorAll('.target-weight-input');
+    }
+    if (!inputs || inputs.length === 0) {
+        if (tableContainer) {
+            inputs = tableContainer.querySelectorAll('.target-weight-input');
+        }
+    }
+    if (!inputs || inputs.length === 0) {
+        inputs = document.querySelectorAll('.target-weight-input');
+    }
+
     const updates = [];
     const updatedMap = new Map();
 
@@ -303,8 +343,10 @@ async function saveTargetWeightsAndRecalculate() {
         const ticker = input.dataset.ticker;
         const val = parseFloat(input.value);
         if (ticker && !isNaN(val) && val >= 0) {
-            updates.push({ ticker, target_weight: val });
-            updatedMap.set(ticker, val);
+            if (!updatedMap.has(ticker)) {
+                updates.push({ ticker, target_weight: val });
+                updatedMap.set(ticker, val);
+            }
         }
     });
 
@@ -458,7 +500,7 @@ function renderPaginatedRows() {
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-slate-800 bg-slate-50/40 border-l border-slate-200/60">${item.weight}%</td>
                       <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${targetWeightDisplay}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMinText}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMaxText}</td>
+                      <td class="py-2 px-2.5 text-right font-mono text-slate-500">${displayBandMaxText}</td>
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
                       <td class="py-2 px-3 text-right font-mono font-medium text-slate-500 border-l border-slate-100">${diffText}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-500">${adjText}</td>
@@ -466,16 +508,19 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 💡 [모바일 밴드리밸런싱 카드 뷰: 실시간 편집 입력 지원]
+            // 모바일 밴드리밸런싱 카드 뷰
             const initialTotal = calculateTotalTargetWeight();
             let mobileHeaderHtml = '';
             
             if (isTargetWeightEditMode) {
+                const isTargetComplete = Math.abs(initialTotal - 100) < 0.05;
+                const btnBg = isTargetComplete ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-500 hover:bg-amber-600';
+                
                 mobileHeaderHtml = `
                     <div class="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl mb-2 flex flex-col gap-2">
-                        <button type="button" id="btnMobileSaveTargetWeight" class="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-between shadow-sm active:scale-95 transition">
+                        <button type="button" id="btnMobileSaveTargetWeight" class="w-full py-2 px-3 rounded-lg ${btnBg} text-white font-bold text-xs flex items-center justify-between shadow-sm active:scale-95 transition">
                             <span class="flex items-center gap-1.5"><i class="fa-solid fa-floppy-disk"></i> 목표비중 저장 및 적용</span>
-                            <span id="mobileTargetWeightSum" class="font-mono bg-emerald-800/40 px-2 py-0.5 rounded text-[11px]">${initialTotal}%</span>
+                            <span id="mobileTargetWeightSum" class="font-mono bg-black/20 px-2 py-0.5 rounded text-[11px]">${initialTotal}%</span>
                         </button>
                     </div>
                 `;
@@ -516,7 +561,6 @@ function renderPaginatedRows() {
 
                 const bandText = hasTarget ? `밴드 ${dynamicBandMin}% ~ ${dynamicBandMax}%` : '밴드 미설정';
 
-                // 모바일 목표비중 영역 (편집 모드 시 입력창 표시)
                 let mobileTargetArea = '';
                 if (isTargetWeightEditMode) {
                     const currentTargetVal = targetW !== null ? targetW : '';
@@ -565,7 +609,6 @@ function renderPaginatedRows() {
 
             mobileList.innerHTML = mobileHeaderHtml + mobileCardsHtml;
 
-            // 모바일 밴드리밸런싱 축소 토글 이벤트
             const rebCloseBtns = mobileList.querySelectorAll('.mobile-rebalance-toggle-btn');
             rebCloseBtns.forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -576,7 +619,6 @@ function renderPaginatedRows() {
                 });
             });
 
-            // 모바일 목표비중 편집 모드 진입 이벤트
             const editTriggers = mobileList.querySelectorAll('.mobile-target-edit-trigger');
             editTriggers.forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -586,7 +628,6 @@ function renderPaginatedRows() {
                 });
             });
 
-            // 모바일 목표비중 저장 버튼 이벤트
             const mobileSaveBtn = document.getElementById('btnMobileSaveTargetWeight');
             if (mobileSaveBtn) {
                 mobileSaveBtn.addEventListener('click', async (e) => {
@@ -596,7 +637,6 @@ function renderPaginatedRows() {
             }
 
         } else {
-            // 기본 모드 PC 행
             tbody.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-600' : 'text-blue-600';
@@ -618,7 +658,6 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 기본 모드 모바일 카드
             mobileList.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';

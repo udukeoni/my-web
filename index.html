@@ -28,16 +28,12 @@
         <p class="text-xs sm:text-sm text-slate-500 mt-1">S&P500·코인의 시장 온도를 0~100으로 읽습니다.</p>
       </div>
       
-      <!-- 우측 컨트롤: 동기화 툴팁 버튼 + 포트폴리오 접근 모달 버튼 -->
       <div class="flex items-center gap-1 sm:gap-2 text-sm text-slate-500 font-medium relative">
-        
         <div class="relative flex items-center justify-center" id="sync-container">
-          <!-- 동기화 회전 버튼 -->
           <button id="btn-sync" onclick="handleSyncClick(event)" class="p-2 hover:bg-slate-100 rounded-lg transition active:scale-95" aria-label="동기화">
             <i id="sync-icon" class="fa-solid fa-arrows-rotate text-slate-400 hover:text-slate-700 transition text-base"></i>
           </button>
           
-          <!-- 순수 시간 확인 미니 말풍선 -->
           <div id="sync-tooltip" class="absolute right-0 top-full mt-2 hidden flex-col items-end z-30 pointer-events-none transition duration-200">
             <div class="w-2.5 h-2.5 bg-slate-900 rotate-45 -mb-1 mr-3 border-l border-t border-slate-800"></div>
             <div class="bg-slate-900 text-white text-[11px] font-mono py-1.5 px-3 rounded-xl shadow-xl whitespace-nowrap border border-slate-800">
@@ -46,7 +42,6 @@
           </div>
         </div>
 
-        <!-- 💡 포트폴리오 접근 지갑 버튼 (클릭 시 로그인 여부 검사 후 모달 또는 이동) -->
         <button id="btn-portfolio-gate" onclick="handlePortfolioClick(event)" class="p-2 opacity-50 hover:opacity-100 hover:bg-slate-100 rounded-lg transition" title="포트폴리오">
           <i class="fa-solid fa-wallet text-slate-500 hover:text-blue-600 text-base"></i>
         </button>
@@ -55,7 +50,6 @@
 
     <!-- 2. 지수 카드 그리드 (2열 듀얼 배치) -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-      
       <!-- [카드 1] S&P500 -->
       <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 flex flex-col items-center">
         <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-50 text-red-600 mb-2">S&P 500</span>
@@ -95,28 +89,29 @@
         <div class="text-5xl font-black mt-3 text-slate-900" id="crypto-score">--</div>
         <span id="crypto-status" class="mt-2.5 text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">탐욕</span>
       </div>
-
     </div>
   </div>
 
-  <!-- 3. 콤팩트 보안 로그인 작은 팝업 모달 -->
+  <!-- 3. 로그인 / 회원가입 통합 모달 -->
   <div id="login-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm overflow-hidden">
       
-      <!-- 모달 상단 헤더 -->
-      <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-        <div class="flex items-center gap-2">
-          <div class="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 text-xs">
-            <i class="fa-solid fa-lock"></i>
-          </div>
-          <h3 class="font-bold text-slate-800 text-sm">로그인</h3>
+      <!-- 모달 상단 탭 (로그인 vs 회원가입) -->
+      <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+        <div class="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl text-xs font-bold">
+          <button type="button" id="tab-btn-login" onclick="switchAuthTab('LOGIN')" class="px-3 py-1 rounded-lg bg-white text-blue-600 shadow-sm transition">
+            로그인
+          </button>
+          <button type="button" id="tab-btn-register" onclick="switchAuthTab('REGISTER')" class="px-3 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition">
+            회원가입
+          </button>
         </div>
         <button type="button" onclick="closeLoginModal()" class="text-slate-400 hover:text-slate-600 text-sm p-1 transition">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
 
-      <!-- 로그인 폼 -->
+      <!-- [A] 로그인 폼 -->
       <form id="login-form" onsubmit="handleLoginSubmit(event)" class="p-5 space-y-3.5 text-xs">
         <div>
           <label class="block font-semibold text-slate-700 mb-1">아이디</label>
@@ -130,18 +125,43 @@
                  class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
         </div>
 
-        <!-- 오류 메시지 출력 영역 -->
         <div id="login-error" class="hidden text-red-500 font-medium text-[11px] bg-red-50 p-2 rounded-md"></div>
 
         <button type="submit" id="btn-login-submit"
                 class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold rounded-lg transition shadow-sm mt-1 text-xs">
           인증 및 대시보드 입장
         </button>
-
-        <p class="text-[10px] text-slate-400 text-center pt-1">
-          * 인가된 계정만 자산 대시보드 접근이 허용됩니다.
-        </p>
       </form>
+
+      <!-- [B] 회원가입 폼 -->
+      <form id="register-form" onsubmit="handleRegisterSubmit(event)" class="hidden p-5 space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">아이디 <span class="text-slate-400 font-normal">(영문/숫자 4~16자)</span></label>
+          <input type="text" id="reg-id" required placeholder="예: investor1004"
+                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">비밀번호 <span class="text-slate-400 font-normal">(4자 이상)</span></label>
+          <input type="password" id="reg-pw" required placeholder="비밀번호 입력"
+                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">닉네임 <span class="text-slate-400 font-normal">(선택)</span></label>
+          <input type="text" id="reg-nickname" placeholder="예: 슈퍼개미"
+                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+        </div>
+
+        <div id="register-error" class="hidden text-red-500 font-medium text-[11px] bg-red-50 p-2 rounded-md"></div>
+        <div id="register-success" class="hidden text-emerald-600 font-medium text-[11px] bg-emerald-50 p-2 rounded-md"></div>
+
+        <button type="submit" id="btn-register-submit"
+                class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-lg transition shadow-sm mt-1 text-xs">
+          회원가입 완료
+        </button>
+      </form>
+
     </div>
   </div>
 
@@ -149,7 +169,6 @@
     const ARC_LENGTH = 251.3;
     let autoCloseTimer = null;
     let isTooltipOpen = false;
-
     const isHoverablePC = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
     function getTheme(score) {
@@ -271,21 +290,15 @@
       }
     }
 
-    // -------------------------------------------------------------
-    // 💡 포트폴리오 접근 분기 & 작은 로그인 팝업 모달 제어 로직
-    // -------------------------------------------------------------
     async function handlePortfolioClick(e) {
       e.preventDefault();
       try {
-        // 현재 브라우저의 로그인 상태 확인
         const res = await fetch('/api/auth');
         const data = await res.json();
 
         if (data.loggedIn) {
-          // 이미 로그인되어 있으면 곧바로 포트폴리오로 입장
           window.location.href = 'port/portfolio.html';
         } else {
-          // 비로그인 상태면 작은 로그인 팝업 모달 열기
           openLoginModal();
         }
       } catch (_) {
@@ -293,14 +306,39 @@
       }
     }
 
+    function switchAuthTab(mode) {
+      const tabLogin = document.getElementById('tab-btn-login');
+      const tabReg = document.getElementById('tab-btn-register');
+      const formLogin = document.getElementById('login-form');
+      const formReg = document.getElementById('register-form');
+      const errLogin = document.getElementById('login-error');
+      const errReg = document.getElementById('register-error');
+      const succReg = document.getElementById('register-success');
+
+      if (errLogin) errLogin.classList.add('hidden');
+      if (errReg) errReg.classList.add('hidden');
+      if (succReg) succReg.classList.add('hidden');
+
+      if (mode === 'LOGIN') {
+        tabLogin.className = 'px-3 py-1 rounded-lg bg-white text-blue-600 shadow-sm transition';
+        tabReg.className = 'px-3 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition';
+        formLogin.classList.remove('hidden');
+        formReg.classList.add('hidden');
+        setTimeout(() => document.getElementById('login-id')?.focus(), 50);
+      } else {
+        tabReg.className = 'px-3 py-1 rounded-lg bg-white text-emerald-600 shadow-sm transition';
+        tabLogin.className = 'px-3 py-1 rounded-lg text-slate-500 hover:text-slate-800 transition';
+        formReg.classList.remove('hidden');
+        formLogin.classList.add('hidden');
+        setTimeout(() => document.getElementById('reg-id')?.focus(), 50);
+      }
+    }
+
     function openLoginModal() {
       const modal = document.getElementById('login-modal');
-      const errBox = document.getElementById('login-error');
-      if (errBox) errBox.classList.add('hidden');
       if (modal) {
         modal.classList.remove('hidden');
-        const idInput = document.getElementById('login-id');
-        if (idInput) setTimeout(() => idInput.focus(), 100);
+        switchAuthTab('LOGIN');
       }
     }
 
@@ -309,7 +347,6 @@
       if (modal) modal.classList.add('hidden');
     }
 
-    // 모달 바깥 어두운 배경 클릭 시 닫기
     document.addEventListener('click', (e) => {
       const modal = document.getElementById('login-modal');
       if (modal && !modal.classList.contains('hidden') && e.target === modal) {
@@ -322,7 +359,6 @@
       }
     });
 
-    // 로그인 폼 전송 핸들러
     async function handleLoginSubmit(e) {
       e.preventDefault();
       const idInput = document.getElementById('login-id');
@@ -348,7 +384,6 @@
         const result = await res.json();
 
         if (result.success) {
-          // 로그인 성공 시 즉시 포트폴리오 대시보드로 이동!
           window.location.href = 'port/portfolio.html';
         } else {
           if (errBox) {
@@ -365,6 +400,64 @@
         if (btnSubmit) {
           btnSubmit.disabled = false;
           btnSubmit.textContent = '인증 및 대시보드 입장';
+        }
+      }
+    }
+
+    async function handleRegisterSubmit(e) {
+      e.preventDefault();
+      const idInput = document.getElementById('reg-id');
+      const pwInput = document.getElementById('reg-pw');
+      const nickInput = document.getElementById('reg-nickname');
+      const errBox = document.getElementById('register-error');
+      const succBox = document.getElementById('register-success');
+      const btnSubmit = document.getElementById('btn-register-submit');
+
+      const user_id = idInput.value.trim();
+      const password = pwInput.value;
+      const nickname = nickInput.value.trim();
+
+      if (errBox) errBox.classList.add('hidden');
+      if (succBox) succBox.classList.add('hidden');
+
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = '가입 처리 중...';
+      }
+
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id, password, nickname })
+        });
+        const result = await res.json();
+
+        if (result.success) {
+          if (succBox) {
+            succBox.textContent = result.message || '가입 완료! 로그인 탭으로 이동합니다.';
+            succBox.classList.remove('hidden');
+          }
+          setTimeout(() => {
+            switchAuthTab('LOGIN');
+            const loginId = document.getElementById('login-id');
+            if (loginId) loginId.value = user_id;
+          }, 1200);
+        } else {
+          if (errBox) {
+            errBox.textContent = result.error || '회원가입 실패';
+            errBox.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (errBox) {
+          errBox.textContent = '서버 통신 오류: ' + err.message;
+          errBox.classList.remove('hidden');
+        }
+      } finally {
+        if (btnSubmit) {
+          btnSubmit.disabled = false;
+          btnSubmit.textContent = '회원가입 완료';
         }
       }
     }

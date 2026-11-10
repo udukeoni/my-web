@@ -19,12 +19,11 @@ function isRebalanceSupportedAccount(accId) {
            (acc && (acc.includes('연금') || acc.includes('ISA')) && acc !== 'ALL');
 }
 
-// 💡 [중복 합산 방지 수정] PC 테이블과 모바일 카드가 동시에 인풋을 가질 때 중복으로 더해져 200%가 되던 버그 해결
+// 동일 ticker 중복 집계 방지 단일 합산 헬퍼
 function calculateTotalTargetWeight() {
     const mobileContainer = document.getElementById('mobileCardList');
     const tableContainer = document.getElementById('tableBody');
     
-    // 모바일 카드가 활성화되어 표시 중인 경우 모바일 인풋 우선 탐색, 없으면 PC 테이블 인풋 탐색
     let inputs = [];
     if (mobileContainer && window.getComputedStyle(mobileContainer).display !== 'none') {
         inputs = mobileContainer.querySelectorAll('.target-weight-input');
@@ -40,7 +39,6 @@ function calculateTotalTargetWeight() {
 
     let total = 0;
     if (inputs.length > 0) {
-        // 동일 ticker가 중복 집계되지 않도록 Map으로 한 번 더 방어
         const tickerMap = new Map();
         inputs.forEach(inp => {
             const ticker = inp.dataset.ticker || Math.random().toString();
@@ -64,7 +62,6 @@ function calculateTotalTargetWeight() {
 function updateTargetHeaderLiveSum() {
     const total = calculateTotalTargetWeight();
 
-    // PC 헤더 버튼 갱신
     const btn = document.getElementById('btnToggleTargetEdit');
     if (btn && isTargetWeightEditMode) {
         btn.textContent = `목표비중(${total})`;
@@ -77,7 +74,6 @@ function updateTargetHeaderLiveSum() {
         }
     }
 
-    // 모바일 전용 저장 바 갱신
     const mobileSaveBtn = document.getElementById('btnMobileSaveTargetWeight');
     const mobileSumSpan = document.getElementById('mobileTargetWeightSum');
     if (mobileSumSpan) mobileSumSpan.textContent = `${total}%`;
@@ -181,7 +177,36 @@ function renderDataTable(viewType, dataList) {
         const showWideRebalance = isSupported && isRebalanceExpanded;
 
         if (title) title.textContent = showWideRebalance ? '자산배분 밴드리밸런싱 포트폴리오' : '보유 종목 상세';
-        if (badge) badge.textContent = `${currentDataList.length}종목`;
+
+        // 💡 [핵심] 모바일용 종목 배지 뒤에 [] (확장/축소) 버튼 배치
+        if (badge) {
+            const countText = `${currentDataList.length}종목`;
+            if (isSupported) {
+                const iconHtml = showWideRebalance 
+                    ? '<i class="fa-solid fa-compress text-[10px] ml-1"></i>' 
+                    : '<i class="fa-solid fa-expand text-[10px] ml-1"></i>';
+                const actionTitle = showWideRebalance ? '기본 종목 상세로 축소' : '자산배분 밴드리밸런싱 모드로 확장';
+                
+                badge.innerHTML = `
+                    <span>${countText}</span>
+                    <button type="button" id="btnBadgeToggleRebalance" title="${actionTitle}" class="ml-1 px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold text-[10px] inline-flex items-center active:scale-95 transition">
+                        ${iconHtml}
+                    </button>
+                `;
+
+                const btnBadge = badge.querySelector('#btnBadgeToggleRebalance');
+                if (btnBadge) {
+                    btnBadge.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        isRebalanceExpanded = !isRebalanceExpanded;
+                        if (!isRebalanceExpanded) isTargetWeightEditMode = false;
+                        renderDataTable('HOLDINGS', currentDataList);
+                    });
+                }
+            } else {
+                badge.textContent = countText;
+            }
+        }
 
         if (btnOpenModal) {
             btnOpenModal.classList.add('hidden');
@@ -500,7 +525,7 @@ function renderPaginatedRows() {
                       <td class="py-2 px-2.5 text-right font-mono font-bold text-slate-800 bg-slate-50/40 border-l border-slate-200/60">${item.weight}%</td>
                       <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700 bg-emerald-50/30">${targetWeightDisplay}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMinText}</td>
-                      <td class="py-2 px-2.5 text-right font-mono text-slate-500">${displayBandMaxText}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-500">${displayBandMaxText}</td>
                       <td class="py-2 px-2.5 text-center bg-slate-50/60">${statusBadge}</td>
                       <td class="py-2 px-3 text-right font-mono font-medium text-slate-500 border-l border-slate-100">${diffText}</td>
                       <td class="py-2 px-2.5 text-right font-mono font-medium text-slate-500">${adjText}</td>
@@ -584,13 +609,14 @@ function renderPaginatedRows() {
                     `;
                 }
 
+                // 💡 [수정] 카드 비중 배지에서 불필요한 토글 아이콘을 빼고 깔끔하게 표시
                 return `
                     <div class="py-2.5 px-3 bg-white border-b border-slate-100 text-xs">
                         <div class="flex justify-between items-center mb-1.5">
                             <div class="font-bold text-slate-900 truncate max-w-[170px]">${item.asset_name}</div>
                             <div class="flex items-center gap-1.5">
-                                <span class="mobile-rebalance-toggle-btn cursor-pointer font-mono font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded text-[11px] active:scale-95 transition" title="터치 시 기본 화면으로 축소">
-                                    ${item.weight}% <i class="fa-solid fa-compress text-[9px]"></i>
+                                <span class="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-[11px]">
+                                    ${item.weight}%
                                 </span>
                                 <div>${statusBadge}</div>
                             </div>
@@ -608,16 +634,6 @@ function renderPaginatedRows() {
             }).join('');
 
             mobileList.innerHTML = mobileHeaderHtml + mobileCardsHtml;
-
-            const rebCloseBtns = mobileList.querySelectorAll('.mobile-rebalance-toggle-btn');
-            rebCloseBtns.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    isRebalanceExpanded = false;
-                    isTargetWeightEditMode = false;
-                    renderDataTable('HOLDINGS', currentDataList);
-                });
-            });
 
             const editTriggers = mobileList.querySelectorAll('.mobile-target-edit-trigger');
             editTriggers.forEach(btn => {
@@ -658,6 +674,7 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
+            // 💡 [수정] 기본 모드 모바일 카드: 비중 배지에서 확장 기능 제거하고 단독 표시
             mobileList.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
@@ -684,18 +701,11 @@ function renderPaginatedRows() {
                     profitHtml = `<span class="font-bold ${profitColor}">${sign}₩${Number(item.profit_amount).toLocaleString()}</span>`;
                 }
 
-                const weightBadgeHtml = isSupported 
-                    ? `<div class="mobile-rebalance-open-btn cursor-pointer font-mono font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded text-[11px] flex items-center gap-1 active:scale-95 transition" title="터치 시 자산배분 밴드리밸런싱 분석 확장">
-                         <span>${item.weight}%</span>
-                         <i class="fa-solid fa-expand text-[9px] text-blue-500"></i>
-                       </div>`
-                    : `<div class="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">${item.weight}%</div>`;
-
                 return `
                     <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs select-none">
                         <div class="flex justify-between items-center mb-1">
                             <div class="font-bold text-slate-900 truncate max-w-[190px]">${item.asset_name}</div>
-                            ${weightBadgeHtml}
+                            <div class="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">${item.weight}%</div>
                         </div>
                         <div class="flex justify-between items-center text-[11px] text-slate-600">
                             <div class="mobile-price-toggle-btn cursor-pointer py-0.5 active:opacity-60 transition" data-ticker="${item.ticker}">
@@ -708,15 +718,6 @@ function renderPaginatedRows() {
                     </div>
                 `;
             }).join('');
-
-            const rebOpenBtns = mobileList.querySelectorAll('.mobile-rebalance-open-btn');
-            rebOpenBtns.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    isRebalanceExpanded = true;
-                    renderDataTable('HOLDINGS', currentDataList);
-                });
-            });
 
             const priceBtns = mobileList.querySelectorAll('.mobile-price-toggle-btn');
             priceBtns.forEach(btn => {

@@ -198,14 +198,19 @@ function applyViewSwitching(holdingsData) {
     }
 }
 
+// 💡 [수정] 새 계좌 추가 후 즉시 재렌더링되도록 콤보박스 갱신 로직 유연화
 function populateAccountOptions(accounts) {
     const select = document.getElementById('selectAccount');
-    if (!select || select.children.length > 1) return;
+    if (!select) return;
+
+    const currentVal = currentAccount || select.value || 'ALL';
+    select.innerHTML = '<option value="ALL">전체 계좌 종합</option>';
 
     accounts.forEach(acc => {
         const opt = document.createElement('option');
         opt.value = acc.account_id;
         opt.textContent = acc.account_name;
+        if (acc.account_id === currentVal) opt.selected = true;
         select.appendChild(opt);
     });
 }
@@ -214,11 +219,14 @@ function populateModalOptions(accounts, holdings) {
     const accountSelect = document.getElementById('txAccount');
     const stockSelect = document.getElementById('txStock');
 
-    if (accountSelect && accountSelect.children.length === 0) {
+    if (accountSelect) {
+        const curVal = accountSelect.value;
+        accountSelect.innerHTML = '';
         accounts.forEach(acc => {
             const opt = document.createElement('option');
             opt.value = acc.account_id;
             opt.textContent = acc.account_name;
+            if (acc.account_id === curVal) opt.selected = true;
             accountSelect.appendChild(opt);
         });
     }
@@ -294,7 +302,7 @@ function setupTabButtons() {
     });
 }
 
-// 💡 [신규 추가] 네이버 증권 종목 실시간 검색 및 콤보박스 연동 엔진
+// 💡 네이버 증권 종목 실시간 검색 및 콤보박스 연동 엔진 (최신 원본 100% 보존)
 function setupStockSearchEngine() {
     const btnToggle = document.getElementById('btnToggleStockSearch');
     const searchPanel = document.getElementById('stockSearchPanel');
@@ -341,7 +349,6 @@ function setupStockSearchEngine() {
         }
     });
 
-    // 실시간 검색어 입력 처리 (디바운스 300ms)
     inputKeyword.addEventListener('input', () => {
         const query = inputKeyword.value.trim();
 
@@ -380,7 +387,6 @@ function setupStockSearchEngine() {
                     </div>
                 `).join('');
 
-                // 검색 목록 아이템 클릭 시 콤보박스에 반영
                 const itemElements = resultsContainer.querySelectorAll('.stock-search-item');
                 itemElements.forEach(el => {
                     el.addEventListener('click', () => {
@@ -389,7 +395,6 @@ function setupStockSearchEngine() {
 
                         if (hiddenStockName) hiddenStockName.value = name;
 
-                        // 콤보박스에 이미 존재하는지 검사
                         let foundOption = false;
                         for (let i = 0; i < stockSelect.options.length; i++) {
                             if (stockSelect.options[i].value === ticker) {
@@ -399,7 +404,6 @@ function setupStockSearchEngine() {
                             }
                         }
 
-                        // 없는 경우 새 옵션으로 콤보박스 상단에 즉시 생성 후 선택
                         if (!foundOption) {
                             const newOption = document.createElement('option');
                             newOption.value = ticker;
@@ -506,7 +510,6 @@ function setupTxModal() {
         }
     });
 
-    // 수량 및 단가 입력 시 정산금액 자동 계산
     const autoCalcAmount = () => {
         if (['매수', '매도'].includes(selectType.value)) {
             const q = Number(inputQty.value) || 0;
@@ -533,7 +536,6 @@ function setupTxModal() {
                 submitBtn.textContent = isEdit ? '수정 중...' : '저장 중...';
             }
 
-            // 선택된 콤보박스의 한글 종목명 추출
             let selectedStockName = '';
             if (hiddenStockName && hiddenStockName.value) {
                 selectedStockName = hiddenStockName.value;
@@ -609,6 +611,97 @@ function setupTxModal() {
             } finally {
                 btnDelete.disabled = false;
                 btnDelete.innerHTML = '<i class="fa-solid fa-trash-can"></i> 삭제하기';
+            }
+        });
+    }
+}
+
+// 💡 [신규 추가] 계좌 직접 추가 모달 제어 및 API 통신 엔진
+function setupAddAccountModal() {
+    const modal = document.getElementById('addAccountModal');
+    const btnOpen = document.getElementById('btnOpenAddAccountModal');
+    const btnClose = document.getElementById('btnCloseAddAccountModal');
+    const btnCancel = document.getElementById('btnCancelAddAccount');
+    const form = document.getElementById('addAccountForm');
+    const inputName = document.getElementById('newAccountName');
+    const inputBroker = document.getElementById('newAccountBroker');
+    const selectType = document.getElementById('newAccountType');
+    const errBox = document.getElementById('addAccountError');
+    const btnSubmit = document.getElementById('btnSubmitAddAccount');
+
+    if (!modal) return;
+
+    const openModal = () => {
+        if (form) form.reset();
+        if (errBox) errBox.classList.add('hidden');
+        modal.classList.remove('hidden');
+        setTimeout(() => inputName && inputName.focus(), 100);
+    };
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+    };
+
+    if (btnOpen) btnOpen.addEventListener('click', openModal);
+    if (btnClose) btnClose.addEventListener('click', closeModal);
+    if (btnCancel) btnCancel.addEventListener('click', closeModal);
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const account_name = inputName.value.trim();
+            const broker = inputBroker.value.trim();
+            const account_type = selectType.value;
+
+            if (!account_name) {
+                if (errBox) {
+                    errBox.textContent = '계좌명을 입력해 주세요.';
+                    errBox.classList.remove('hidden');
+                }
+                return;
+            }
+
+            if (btnSubmit) {
+                btnSubmit.disabled = true;
+                btnSubmit.textContent = '개설 중...';
+            }
+            if (errBox) errBox.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/accounts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ account_name, broker, account_type })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    closeModal();
+                    if (result.account && result.account.account_id) {
+                        currentAccount = result.account.account_id;
+                    }
+                    await fetchD1Portfolio();
+                    alert(result.message || '새 계좌가 등록되었습니다!');
+                } else {
+                    if (errBox) {
+                        errBox.textContent = result.error || '계좌 등록 실패';
+                        errBox.classList.remove('hidden');
+                    }
+                }
+            } catch (err) {
+                if (errBox) {
+                    errBox.textContent = '통신 에러: ' + err.message;
+                    errBox.classList.remove('hidden');
+                }
+            } finally {
+                if (btnSubmit) {
+                    btnSubmit.disabled = false;
+                    btnSubmit.textContent = '계좌 개설';
+                }
             }
         });
     }
@@ -803,6 +896,7 @@ function setupSyncPriceButton() {
     const btn = document.getElementById('btnSyncPrices');
     const icon = document.getElementById('syncIcon');
     const tooltip = document.getElementById('syncTooltip');
+    const timeEl = document.getElementById('syncTooltipTime');
     if (!btn || !tooltip) return;
 
     let tooltipTimeout = null;
@@ -911,8 +1005,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupTabButtons();
     setupSyncPriceButton();
-    setupStockSearchEngine();
+    setupStockSearchEngine(); // 💡 네이버 실시간 종목 검색 엔진 유지
     setupTxModal();
+    setupAddAccountModal();   // 💡 신규 계좌 직접 추가 모달 연동
     setupOcrEngine();
     fetchD1Portfolio();
 });

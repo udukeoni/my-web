@@ -1,6 +1,4 @@
 // functions/api/portfolio.js
-// 계좌/보유종목/원장 집계 + total_buy_amount 정수 원금 회계 + 밴드 배율(하한 x0.8, 상한 x1.2) 백엔드 자동 연산 + 자산 스냅샷 고유 동기화 시간(daily_snapshots.updated_at) 독립 연동
-
 export async function onRequestGet(context) {
     const { request, env } = context;
     const url = new URL(request.url);
@@ -8,118 +6,144 @@ export async function onRequestGet(context) {
     const accountFilter = url.searchParams.get('account') || 'ALL';
     const viewType = url.searchParams.get('view') || 'HOLDINGS';
 
+    // 💡 1. 로그인 세션 쿠키에서 현재 사용자 식별 (user_id 추출)
+    const cookieHeader = request.headers.get('Cookie') || '';
+    const cookies = Object.fromEntries(
+        cookieHeader.split(';').map(c => {
+            const [k, ...v] = c.trim().split('=');
+            return [k, v.join('=')];
+        })
+    );
+
+    let currentUserId = 'antmaster84'; // 기본값 (세션 미확인 시 기본 관리자 귀속)
+    const token = cookies['auth_token'];
+    if (token) {
+        try {
+            const decoded = decodeURIComponent(escape(atob(token)));
+            const session = JSON.parse(decoded);
+            if (session && session.user_id) {
+                currentUserId = session.user_id;
+            }
+        } catch (_) {}
+    }
+
     try {
         const db = env.DB;
 
-        // 1. 전체 계좌 목록 조회
-        const accountsResult = await db.prepare("SELECT * FROM accounts ORDER BY account_id ASC").all();
+        // 💡 2. 현재 로그인한 사용자 본인 소유의 계좌만 조회 (타인 데이터 완벽 격리)
+        const accountsResult = await db.prepare(
+            "SELECT * FROM accounts WHERE user_id = ? OR (user_id IS NULL AND ? = 'antmaster84') ORDER BY account_id ASC"
+        ).bind(currentUserId, currentUserId).all();
         const accounts = accountsResult.results || [];
+
+        const allowedAccountIds = accounts.map(a => a.account_id);
 
         const accountNameMap = {};
         accounts.forEach(a => {
             if (a.account_id) accountNameMap[a.account_id] = a.account_name;
         });
 
-        // 2. 전체 종목 마스터 조회
         const assetsResult = await db.prepare("SELECT ticker, asset_name FROM assets").all();
         const assetNameMap = {};
         (assetsResult.results || []).forEach(ast => {
             if (ast.ticker) assetNameMap[ast.ticker] = ast.asset_name;
         });
 
-        // 3. 보유 종목 상세 조회 (total_buy_amount 정수 원금 기준)
-        let holdingsQuery = `
-            SELECT 
-                h.holding_id,
-                h.account_id,
-                ac.account_name,
-                h.ticker,
-                a.asset_name,
-                a.sector,
-                h.quantity,
-                CASE 
-                    WHEN h.quantity > 0 AND h.total_buy_amount > 0 THEN (h.total_buy_amount * 1.0 / h.quantity)
-                    ELSE h.avg_buy_price 
-                END AS avg_buy_price,
-                a.current_price,
-                0 AS daily_change_rate,
-                CASE 
-                    WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
-                    ELSE ROUND(h.quantity * h.avg_buy_price) 
-                END AS buy_amount,
-                ROUND(h.quantity * a.current_price) AS eval_amount,
-                ROUND(h.quantity * a.current_price) - (
+        // 💡 3. 보유 종목(holdings) 조회 - 본인 소유 계좌의 주식만 추출
+        let holdings = [];
+        if (allowedAccountIds.length > 0) {
+            const placeholders = allowedAccountIds.map(() => '?').join(',');
+            let holdingsQuery = `
+                SELECT 
+                    h.holding_id,
+                    h.account_id,
+                    ac.account_name,
+                    h.ticker,
+                    a.asset_name,
+                    a.sector,
+                    h.quantity,
+                    CASE 
+                        WHEN h.quantity > 0 AND h.total_buy_amount > 0 THEN (h.total_buy_amount * 1.0 / h.quantity)
+                        ELSE h.avg_buy_price 
+                    END AS avg_buy_price,
+                    a.current_price,
+                    0 AS daily_change_rate,
                     CASE 
                         WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
                         ELSE ROUND(h.quantity * h.avg_buy_price) 
-                    END
-                ) AS profit_amount,
-                ROUND(
-                    (
-                        (h.quantity * a.current_price) - (
+                    END AS buy_amount,
+                    ROUND(h.quantity * a.current_price) AS eval_amount,
+                    ROUND(h.quantity * a.current_price) - (
+                        CASE 
+                            WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
+                            ELSE ROUND(h.quantity * h.avg_buy_price) 
+                        END
+                    ) AS profit_amount,
+                    ROUND(
+                        (
+                            (h.quantity * a.current_price) - (
+                                CASE 
+                                    WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
+                                    ELSE (h.quantity * h.avg_buy_price) 
+                                END
+                            )
+                        ) * 100.0 / (
                             CASE 
                                 WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
                                 ELSE (h.quantity * h.avg_buy_price) 
                             END
-                        )
-                    ) * 100.0 / (
-                        CASE 
-                            WHEN h.total_buy_amount > 0 THEN h.total_buy_amount 
-                            ELSE (h.quantity * h.avg_buy_price) 
-                        END
-                    ), 2
-                ) AS profit_rate
-            FROM holdings h
-            JOIN accounts ac ON h.account_id = ac.account_id
-            JOIN assets a ON h.ticker = a.ticker
-        `;
+                        ), 2
+                    ) AS profit_rate
+                FROM holdings h
+                JOIN accounts ac ON h.account_id = ac.account_id
+                JOIN assets a ON h.ticker = a.ticker
+                WHERE h.account_id IN (${placeholders})
+            `;
 
-        const holdingsParams = [];
-        if (accountFilter !== 'ALL') {
-            holdingsQuery += " WHERE h.account_id = ?";
-            holdingsParams.push(accountFilter);
+            const holdingsParams = [...allowedAccountIds];
+            if (accountFilter !== 'ALL' && allowedAccountIds.includes(accountFilter)) {
+                holdingsQuery += " AND h.account_id = ?";
+                holdingsParams.push(accountFilter);
+            } else if (accountFilter !== 'ALL') {
+                holdingsQuery += " AND 1=0"; // 본인 계좌가 아니면 빈 결과 반환
+            }
+            holdingsQuery += " ORDER BY eval_amount DESC";
+
+            const holdingsStmt = db.prepare(holdingsQuery);
+            const holdingsResult = await holdingsStmt.bind(...holdingsParams).all();
+            holdings = holdingsResult.results || [];
         }
-        holdingsQuery += " ORDER BY eval_amount DESC";
 
-        const holdingsStmt = db.prepare(holdingsQuery);
-        const holdingsResult = holdingsParams.length > 0 
-            ? await holdingsStmt.bind(...holdingsParams).all() 
-            : await holdingsStmt.all();
-        const holdings = holdingsResult.results || [];
-
-        // 4. 거래원장 (trade_logs) 조회
+        // 💡 4. 거래 원장(trade_logs) 조회 - 본인 소유 계좌의 거래만 추출
         let rawLogs = [];
-        let logQuery = "SELECT * FROM trade_logs";
-        const logConditions = [];
-        const logParams = [];
+        if (allowedAccountIds.length > 0) {
+            const placeholders = allowedAccountIds.map(() => '?').join(',');
+            let logQuery = `SELECT * FROM trade_logs WHERE account_id IN (${placeholders})`;
+            const logParams = [...allowedAccountIds];
 
-        if (accountFilter !== 'ALL') {
-            logConditions.push("account_id = ?");
-            logParams.push(accountFilter);
-        }
+            if (accountFilter !== 'ALL' && allowedAccountIds.includes(accountFilter)) {
+                logQuery += " AND account_id = ?";
+                logParams.push(accountFilter);
+            }
 
-        if (viewType === 'TRADE') {
-            logConditions.push("trade_type IN ('매수', '매도')");
-        } else if (viewType === 'DIVIDEND') {
-            logConditions.push("trade_type IN ('분배금', '배당금')");
-        } else if (viewType === 'TRANSFER') {
-            logConditions.push("trade_type IN ('입금', '출금', '이자')");
-        }
+            if (viewType === 'TRADE') {
+                logQuery += " AND trade_type IN ('매수', '매도')";
+            } else if (viewType === 'DIVIDEND') {
+                logQuery += " AND trade_type IN ('분배금', '배당금')";
+            } else if (viewType === 'TRANSFER') {
+                logQuery += " AND trade_type IN ('입금', '출금', '이자')";
+            }
 
-        if (logConditions.length > 0) {
-            logQuery += " WHERE " + logConditions.join(" AND ");
-        }
-        logQuery += " ORDER BY trade_date DESC, trade_id DESC LIMIT 1000";
+            logQuery += " ORDER BY trade_date DESC, trade_id DESC LIMIT 1000";
 
-        try {
-            const logStmt = db.prepare(logQuery);
-            const logResult = logParams.length > 0 
-                ? await logStmt.bind(...logParams).all() 
-                : await logStmt.all();
-            rawLogs = logResult.results || [];
-        } catch (logErr) {
-            console.error("trade_logs 조회 예외:", logErr.message);
-            rawLogs = [];
+            try {
+                const logStmt = db.prepare(logQuery);
+                const logResult = await logStmt.bind(...logParams).all();
+                rawLogs = logResult.results || [];
+            } catch (logErr) {
+                console.error("trade_logs 조회 예외:", logErr.message);
+                rawLogs = [];
+            }
         }
 
         const logs = rawLogs.map(item => {
@@ -139,7 +163,7 @@ export async function onRequestGet(context) {
             };
         });
 
-        // 5. 예수금 및 요약 집계 (1원 단위 정수 보장)
+        // 💡 5. 자산 합산 계산 (예수금, 평가금액, 순자산)
         let targetCash = 0;
         if (accountFilter === 'ALL') {
             targetCash = accounts.reduce((acc, cur) => acc + (cur.cash_balance || 0), 0);
@@ -158,33 +182,37 @@ export async function onRequestGet(context) {
         const netProfitRate = totalAssetInvested > 0 ? Number(((totalProfit / totalAssetInvested) * 100).toFixed(2)) : 0;
         const cashWeight = netWorth > 0 ? Number(((targetCash / netWorth) * 100).toFixed(1)) : 0;
 
-        // 6. 리밸런싱 설정값 조회 및 계산 맵 구성
+        // 💡 6. 밴드리밸런싱 설정 조회
         let rebalanceSettingsMap = new Map();
         let rebalanceCashSetting = null;
 
-        try {
-            const rebQuery = accountFilter === 'ALL'
-                ? "SELECT account_id, ticker, target_weight, band_min, band_max FROM rebalance_settings"
-                : "SELECT account_id, ticker, target_weight, band_min, band_max FROM rebalance_settings WHERE account_id = ?";
-            const rebStmt = db.prepare(rebQuery);
-            const rebRes = accountFilter === 'ALL' ? await rebStmt.all() : await rebStmt.bind(accountFilter).all();
-            
-            (rebRes.results || []).forEach(r => {
-                rebalanceSettingsMap.set(`${r.account_id}_${r.ticker}`, r);
-                if (r.ticker === 'CASH') {
-                    const cTarget = Number(r.target_weight);
-                    rebalanceCashSetting = {
-                        ...r,
-                        band_min: Number((cTarget * 0.8).toFixed(2)),
-                        band_max: Number((cTarget * 1.2).toFixed(2))
-                    };
-                }
-            });
-        } catch (rebErr) {
-            console.error("리밸런싱 설정 조회 예외:", rebErr.message);
+        if (allowedAccountIds.length > 0) {
+            try {
+                const placeholders = allowedAccountIds.map(() => '?').join(',');
+                const rebQuery = accountFilter === 'ALL'
+                    ? `SELECT account_id, ticker, target_weight, band_min, band_max FROM rebalance_settings WHERE account_id IN (${placeholders})`
+                    : `SELECT account_id, ticker, target_weight, band_min, band_max FROM rebalance_settings WHERE account_id = ?`;
+                const rebStmt = db.prepare(rebQuery);
+                const rebRes = accountFilter === 'ALL' 
+                    ? await rebStmt.bind(...allowedAccountIds).all() 
+                    : await rebStmt.bind(accountFilter).all();
+                
+                (rebRes.results || []).forEach(r => {
+                    rebalanceSettingsMap.set(`${r.account_id}_${r.ticker}`, r);
+                    if (r.ticker === 'CASH') {
+                        const cTarget = Number(r.target_weight);
+                        rebalanceCashSetting = {
+                            ...r,
+                            band_min: Number((cTarget * 0.8).toFixed(2)),
+                            band_max: Number((cTarget * 1.2).toFixed(2))
+                        };
+                    }
+                });
+            } catch (rebErr) {
+                console.error("리밸런싱 설정 조회 예외:", rebErr.message);
+            }
         }
 
-        // 종목별 비중 및 밴드리밸런싱 자동 연산
         const holdingsWithWeight = holdings.map(item => {
             const currentEval = item.eval_amount || 0;
             const currentWeight = netWorth > 0 ? Number(((currentEval / netWorth) * 100).toFixed(2)) : 0;
@@ -232,20 +260,18 @@ export async function onRequestGet(context) {
             };
         });
 
-        // 7. 자산 추이 그래프 데이터 조회
+        // 💡 7. 일별 자산 추이 스냅샷 (antmaster84 관리자는 ALL 전체 기록, 일반 회원은 개별 계좌 데이터 우선)
         let dailyHistory = [];
         try {
-            const dailyQuery = accountFilter === 'ALL'
-                ? "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = 'ALL' ORDER BY snapshot_date ASC"
-                : "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = ? ORDER BY snapshot_date ASC";
+            const targetSnapAccount = (currentUserId === 'antmaster84' && accountFilter === 'ALL') ? 'ALL' : accountFilter;
+            const dailyQuery = "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = ? ORDER BY snapshot_date ASC";
             const dailyStmt = db.prepare(dailyQuery);
-            const dailyRes = accountFilter === 'ALL' ? await dailyStmt.all() : await dailyStmt.bind(accountFilter).all();
+            const dailyRes = await dailyStmt.bind(targetSnapAccount).all();
             dailyHistory = dailyRes.results || [];
         } catch (chartErr) {
             console.error("차트 데이터 조회 에러:", chartErr.message);
         }
 
-        // 8. 💡 자산 스냅샷 고유 동기화 일시(daily_snapshots.updated_at) 단독 조회
         let serverSyncTime = null;
         try {
             const snapshotTimeRes = await db.prepare(
@@ -261,6 +287,7 @@ export async function onRequestGet(context) {
             success: true,
             accountFilter,
             viewType,
+            currentUser: currentUserId,
             lastSyncTime: serverSyncTime,
             summary: {
                 netWorth,

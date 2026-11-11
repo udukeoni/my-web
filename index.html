@@ -120,7 +120,7 @@
         </div>
 
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">비밀번호</label>
+          <label class="block font-semibold text-slate-700 mb-1">비밀번호 <span class="text-[10px] text-blue-600 font-normal">(한글 자동변환 적용)</span></label>
           <input type="password" id="login-pw" required autocomplete="current-password" placeholder="비밀번호 입력"
                  class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
         </div>
@@ -137,19 +137,19 @@
       <form id="register-form" onsubmit="handleRegisterSubmit(event)" class="hidden p-5 space-y-3 text-xs">
         <div>
           <label class="block font-semibold text-slate-700 mb-1">아이디 <span class="text-slate-400 font-normal">(영문/숫자 4~16자)</span></label>
-          <input type="text" id="reg-id" required placeholder="예: investor1004"
+          <input type="text" id="reg-id" required placeholder="예: workerant01"
                  class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
         </div>
 
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">비밀번호 <span class="text-slate-400 font-normal">(4자 이상)</span></label>
+          <label class="block font-semibold text-slate-700 mb-1">비밀번호 <span class="text-[10px] text-emerald-600 font-normal">(한글 입력 시 영문 자동변환)</span></label>
           <input type="password" id="reg-pw" required placeholder="비밀번호 입력"
                  class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
         </div>
 
         <div>
           <label class="block font-semibold text-slate-700 mb-1">닉네임 <span class="text-slate-400 font-normal">(선택)</span></label>
-          <input type="text" id="reg-nickname" placeholder="예: 슈퍼개미"
+          <input type="text" id="reg-nickname" placeholder="예: 일개미"
                  class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
         </div>
 
@@ -170,6 +170,70 @@
     let autoCloseTimer = null;
     let isTooltipOpen = false;
     const isHoverablePC = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+    // 💡 [핵심] 한글(음절/자모) ➔ 표준 QWERTY 영문 키 변환 엔진
+    const CHOSUNG = ['r','R','s','e','E','f','a','q','Q','t','T','d','w','W','c','z','x','v','g'];
+    const JUNGSUNG = ['k','o','i','O','j','p','u','P','h','hk','ho','hl','y','n','nj','np','nl','b','m','ml','l'];
+    const JONGSUNG = ['','r','R','rt','s','sw','sg','e','f','fr','fa','fq','ft','fx','fv','fg','a','q','qt','t','T','d','w','c','z','x','v','g'];
+
+    const SINGLE_JAMO_MAP = {
+      'ㄱ':'r','ㄲ':'R','ㄳ':'rt','ㄴ':'s','ㄵ':'sw','ㄶ':'sg','ㄷ':'e','ㄸ':'E','ㄹ':'f',
+      'ㄺ':'fr','ㄻ':'fa','ㄼ':'fq','ㄽ':'ft','ㄾ':'fx','ㄿ':'fv','ㅀ':'fg','ㅁ':'a','ㅂ':'q',
+      'ㅃ':'Q','ㅄ':'qt','ㅅ':'t','ㅆ':'T','ㅇ':'d','ㅈ':'w','ㅉ':'W','ㅊ':'c','ㅋ':'z',
+      'ㅌ':'x','ㅍ':'v','ㅎ':'g','ㅏ':'k','ㅐ':'o','ㅑ':'i','ㅒ':'O','ㅓ':'j','ㅔ':'p',
+      'ㅕ':'u','ㅖ':'P','ㅗ':'h','ㅘ':'hk','ㅙ':'ho','ㅚ':'hl','ㅛ':'y','ㅜ':'n','ㅝ':'nj',
+      'ㅞ':'np','ㅟ':'nl','ㅠ':'b','ㅡ':'m','ㅢ':'ml','ㅣ':'l'
+    };
+
+    function convertKorToEngKey(text) {
+      if (!text) return '';
+      let result = '';
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const code = char.charCodeAt(0);
+
+        // 1. 완성형 한글 (가 ~ 힣: 0xAC00 ~ 0xD7A3)
+        if (code >= 0xAC00 && code <= 0xD7A3) {
+          const syllableIndex = code - 0xAC00;
+          const cho = Math.floor(syllableIndex / 588);
+          const jung = Math.floor((syllableIndex % 588) / 28);
+          const jong = syllableIndex % 28;
+
+          result += CHOSUNG[cho] + JUNGSUNG[jung] + JONGSUNG[jong];
+        } 
+        // 2. 단일 자음/모음 (ㄱ ~ ㅣ)
+        else if (SINGLE_JAMO_MAP[char]) {
+          result += SINGLE_JAMO_MAP[char];
+        } 
+        // 3. 숫자, 영문, 특수문자 등은 그대로 유지
+        else {
+          result += char;
+        }
+      }
+      return result;
+    }
+
+    function setupPasswordAutoConverter() {
+      const pwInputs = [document.getElementById('login-pw'), document.getElementById('reg-pw')];
+      pwInputs.forEach(input => {
+        if (!input) return;
+
+        // input 이벤트 시 실시간 한글 검출 및 영문 변환
+        input.addEventListener('input', () => {
+          const original = input.value;
+          const converted = convertKorToEngKey(original);
+          if (original !== converted) {
+            input.value = converted;
+          }
+        });
+
+        // 한글 IME 조합 완료(compositionend) 시 즉시 변환
+        input.addEventListener('compositionend', () => {
+          input.value = convertKorToEngKey(input.value);
+        });
+      });
+    }
 
     function getTheme(score) {
       if (score <= 24) return { label: '극단적 공포', color: '#ef4444', bg: 'bg-red-100', text: 'text-red-700' };
@@ -367,7 +431,8 @@
       const btnSubmit = document.getElementById('btn-login-submit');
 
       const user_id = idInput.value.trim();
-      const password = pwInput.value;
+      // 전송 전에도 영문 변환 안전 처리
+      const password = convertKorToEngKey(pwInput.value);
 
       if (errBox) errBox.classList.add('hidden');
       if (btnSubmit) {
@@ -414,7 +479,8 @@
       const btnSubmit = document.getElementById('btn-register-submit');
 
       const user_id = idInput.value.trim();
-      const password = pwInput.value;
+      // 전송 전에도 영문 변환 안전 처리
+      const password = convertKorToEngKey(pwInput.value);
       const nickname = nickInput.value.trim();
 
       if (errBox) errBox.classList.add('hidden');
@@ -499,7 +565,10 @@
       }
     }
 
-    document.addEventListener('DOMContentLoaded', fetchData);
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchData();
+      setupPasswordAutoConverter(); // 💡 한/영 자동 변환기 실행
+    });
   </script>
 </body>
 </html>

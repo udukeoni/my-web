@@ -1,0 +1,250 @@
+<!-- port/admin-users.html -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>사용자 관리 - sleepingant 관리자</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+  <style>
+    body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; }
+  </style>
+</head>
+<body class="p-3 sm:p-6 text-slate-800">
+
+  <main class="max-w-6xl mx-auto space-y-4">
+    
+    <!-- 0. 상단 네비게이션 헤더 바 -->
+    <header class="bg-white px-3.5 sm:px-6 py-3 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between gap-2 select-none">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block animate-pulse"></span>
+        <h1 class="font-bold text-base sm:text-xl text-slate-900 tracking-tight">
+          사용자 관리
+        </h1>
+        <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+          관리자 전용
+        </span>
+      </div>
+
+      <nav class="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium whitespace-nowrap">
+        <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition py-1">공포탐욕지수</a>
+        <a href="portfolio.html" class="text-slate-500 hover:text-blue-600 transition py-1">포트폴리오</a>
+        <a href="admin-users.html" class="text-blue-600 border-b-2 border-blue-600 pb-0.5 font-bold">사용자관리</a>
+        
+        <button type="button" onclick="handleAppLogout()" title="로그아웃" 
+                class="text-slate-500 hover:text-red-600 p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-50 hover:bg-red-50 transition flex items-center gap-1 border border-slate-200 active:scale-95 cursor-pointer">
+          <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+          <span class="hidden sm:inline font-bold text-xs">로그아웃</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- 1. 등록 회원 현황 섹션 -->
+    <section class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-users text-blue-600 text-sm"></i>
+          <h2 class="font-bold text-slate-800 text-sm sm:text-base">등록 회원 목록</h2>
+          <span id="userCountBadge" class="bg-blue-50 text-blue-600 text-xs font-semibold px-2 py-0.5 rounded-full">0명</span>
+        </div>
+        <button type="button" onclick="loadAdminData()" class="px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-blue-600 hover:bg-white rounded-lg border border-slate-200 transition active:scale-95 flex items-center gap-1">
+          <i id="refreshIcon" class="fa-solid fa-arrows-rotate text-[11px]"></i>
+          <span>새로고침</span>
+        </button>
+      </div>
+
+      <!-- 데스크톱 회원 테이블 -->
+      <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="py-3 px-4 text-center w-14">번호</th>
+              <th class="py-3 px-4">사용자 ID</th>
+              <th class="py-3 px-4">닉네임</th>
+              <th class="py-3 px-3 text-center">권한</th>
+              <th class="py-3 px-3 text-center">계정 상태</th>
+              <th class="py-3 px-3 text-center">개설 계좌 수</th>
+              <th class="py-3 px-4 text-right">계좌 예수금 합계</th>
+              <th class="py-3 px-4 text-right">가입 일자</th>
+            </tr>
+          </thead>
+          <tbody id="userTableBody" class="divide-y divide-slate-100 font-medium">
+            <tr>
+              <td colspan="8" class="py-8 text-center text-slate-400">데이터를 불러오는 중입니다...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 모바일 회원 카드 뷰 -->
+      <div id="userMobileList" class="block md:hidden divide-y divide-slate-100 p-2">
+        <div class="py-8 text-center text-slate-400 text-xs">데이터를 불러오는 중입니다...</div>
+      </div>
+    </section>
+
+    <!-- 2. 최근 로그인 감사 로그 섹션 -->
+    <section class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-emerald-600 text-sm"></i>
+          <h2 class="font-bold text-slate-800 text-sm sm:text-base">최근 로그인 감사 로그</h2>
+          <span class="text-[11px] text-slate-400">(최신 50건)</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="py-2.5 px-4">시각</th>
+              <th class="py-2.5 px-3">사용자 ID</th>
+              <th class="py-2.5 px-3 text-center">접속 상태</th>
+              <th class="py-2.5 px-3 font-mono">접속 IP</th>
+              <th class="py-2.5 px-4 text-slate-400 truncate max-w-xs">디바이스 / 브라우저</th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody" class="divide-y divide-slate-100 font-medium">
+            <tr>
+              <td colspan="5" class="py-6 text-center text-slate-400">로그를 불러오는 중입니다...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    async function loadAdminData() {
+      const refreshIcon = document.getElementById('refreshIcon');
+      if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+      try {
+        const res = await fetch('/api/admin-users');
+        if (res.status === 403 || res.status === 401) {
+          alert('관리자 권한이 없거나 로그인이 필요합니다.');
+          window.location.href = 'portfolio.html';
+          return;
+        }
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        renderUsers(data.users || []);
+        renderLogs(data.loginLogs || []);
+      } catch (err) {
+        alert('데이터 로드 실패: ' + err.message);
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+      }
+    }
+
+    function renderUsers(users) {
+      const badge = document.getElementById('userCountBadge');
+      const tbody = document.getElementById('userTableBody');
+      const mobileList = document.getElementById('userMobileList');
+
+      if (badge) badge.textContent = `${users.length}명`;
+
+      if (users.length === 0) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400">등록된 회원이 없습니다.</td></tr>';
+        if (mobileList) mobileList.innerHTML = '<div class="py-8 text-center text-slate-400 text-xs">등록된 회원이 없습니다.</div>';
+        return;
+      }
+
+      if (tbody) {
+        tbody.innerHTML = users.map(u => {
+          const isAdmin = u.role === 'ADMIN';
+          const roleBadge = isAdmin
+            ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">ADMIN</span>'
+            : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">USER</span>';
+
+          const statusBadge = u.status === 'ACTIVE'
+            ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">정상</span>'
+            : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">차단</span>';
+
+          return `
+            <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+              <td class="py-3 px-4 text-center font-mono text-slate-400">${u.user_no}</td>
+              <td class="py-3 px-4 font-bold text-slate-900">${u.user_id}</td>
+              <td class="py-3 px-4 text-slate-700">${u.nickname || '-'}</td>
+              <td class="py-3 px-3 text-center">${roleBadge}</td>
+              <td class="py-3 px-3 text-center">${statusBadge}</td>
+              <td class="py-3 px-3 text-center font-mono font-bold text-blue-600">${u.account_count || 0}개</td>
+              <td class="py-3 px-4 text-right font-mono font-semibold text-slate-800">₩${Number(u.cash_total || 0).toLocaleString()}</td>
+              <td class="py-3 px-4 text-right font-mono text-slate-400 text-[11px]">${u.created_at || '-'}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      if (mobileList) {
+        mobileList.innerHTML = users.map(u => {
+          const isAdmin = u.role === 'ADMIN';
+          const roleBadge = isAdmin
+            ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">ADMIN</span>'
+            : '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">USER</span>';
+
+          return `
+            <div class="p-3 bg-white border-b border-slate-100 text-xs">
+              <div class="flex justify-between items-center mb-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-slate-900">${u.user_id}</span>
+                  <span class="text-slate-500">(${u.nickname || '닉네임 없음'})</span>
+                </div>
+                <div>${roleBadge}</div>
+              </div>
+              <div class="flex justify-between items-center text-[11px] text-slate-500 my-1">
+                <span>보유 계좌: <b class="text-blue-600">${u.account_count || 0}개</b></span>
+                <span class="font-mono">예수금 ₩${Number(u.cash_total || 0).toLocaleString()}</span>
+              </div>
+              <div class="text-[10px] text-slate-400 pt-1 border-t border-slate-50">
+                가입일시: ${u.created_at || '-'}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function renderLogs(logs) {
+      const tbody = document.getElementById('logTableBody');
+      if (!tbody) return;
+
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400">기록된 로그인 로그가 없습니다.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = logs.map(l => {
+        const isSuccess = l.login_status === 'SUCCESS';
+        const badge = isSuccess
+          ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">성공</span>'
+          : '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">실패</span>';
+
+        return `
+          <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-[11px]">
+            <td class="py-2.5 px-4 font-mono text-slate-600 whitespace-nowrap">${l.attempt_time}</td>
+            <td class="py-2.5 px-3 font-bold text-slate-900">${l.user_id}</td>
+            <td class="py-2.5 px-3 text-center">${badge}</td>
+            <td class="py-2.5 px-3 font-mono text-slate-600">${l.ip_address}</td>
+            <td class="py-2.5 px-4 text-slate-400 truncate max-w-xs" title="${l.user_agent}">${l.user_agent}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function handleAppLogout() {
+      if (!confirm('로그아웃 하시겠습니까?')) return;
+      try {
+        await fetch('/api/auth', { method: 'DELETE' });
+      } catch (_) {}
+      window.location.replace('../index.html?logout=' + Date.now());
+    }
+
+    document.addEventListener('DOMContentLoaded', loadAdminData);
+  </script>
+</body>
+</html>

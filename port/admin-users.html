@@ -61,7 +61,7 @@
           <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
             <tr>
               <th class="py-3 px-4 text-center w-14">번호</th>
-              <th class="py-3 px-4">사용자 ID</th>
+              <th class="py-3 px-4">사용자 ID (클릭 시 수정)</th>
               <th class="py-3 px-4">닉네임</th>
               <th class="py-3 px-3 text-center">권한</th>
               <th class="py-3 px-3 text-center">계정 상태</th>
@@ -116,7 +116,81 @@
 
   </main>
 
+  <!-- 3. 회원 정보 수정 / 상태 변경 / 삭제 팝업 모달창 -->
+  <div id="editUserModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-150">
+      
+      <!-- 모달 상단 헤더 -->
+      <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 text-xs">
+            <i class="fa-solid fa-user-gear"></i>
+          </div>
+          <h3 class="font-bold text-slate-800 text-sm">회원 정보 관리</h3>
+        </div>
+        <button type="button" onclick="closeEditUserModal()" class="text-slate-400 hover:text-slate-600 text-sm p-1 transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- 모달 폼 바디 -->
+      <form id="editUserForm" onsubmit="handleEditUserSubmit(event)" class="p-5 space-y-3.5 text-xs">
+        
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">사용자 ID <span class="text-slate-400 font-normal">(변경 불가)</span></label>
+          <input type="text" id="modalUserId" readonly
+                 class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-slate-100 text-slate-500 font-bold focus:outline-none cursor-not-allowed">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">닉네임</label>
+          <input type="text" id="modalNickname" required placeholder="닉네임 입력"
+                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">새 비밀번호 변경 <span class="text-slate-400 font-normal">(변경 시에만 입력)</span></label>
+          <input type="password" id="modalPassword" placeholder="변경할 경우에만 4자 이상 입력"
+                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+          <span class="text-[10px] text-slate-400 mt-0.5 block">* 빈칸으로 두면 기존 비밀번호가 그대로 유지됩니다.</span>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">계정 상태 (로그인 제어)</label>
+          <select id="modalStatus" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+            <option value="ACTIVE">정상 (로그인 가능)</option>
+            <option value="BLOCKED">정지 / 차단 (로그인 불가)</option>
+          </select>
+        </div>
+
+        <div id="modalError" class="hidden text-red-500 font-medium text-[11px] bg-red-50 p-2 rounded-md"></div>
+        <div id="modalSuccess" class="hidden text-emerald-600 font-medium text-[11px] bg-emerald-50 p-2 rounded-md"></div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+          <button type="button" id="btnDeleteUser" onclick="handleDeleteUserClick()"
+                  class="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-lg transition active:scale-95 text-xs flex items-center gap-1 border border-rose-200">
+            <i class="fa-solid fa-trash-can text-[11px]"></i>
+            <span>삭제</span>
+          </button>
+          
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick="closeEditUserModal()" class="px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition text-xs font-medium">
+              취소
+            </button>
+            <button type="submit" id="btnEditSubmit"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow-sm active:scale-95 text-xs">
+              수정 완료
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
   <script>
+    let cachedUsersList = [];
+
     async function loadAdminData() {
       const refreshIcon = document.getElementById('refreshIcon');
       if (refreshIcon) refreshIcon.classList.add('fa-spin');
@@ -132,7 +206,8 @@
         const data = await res.json();
         if (!data.success) throw new Error(data.error);
 
-        renderUsers(data.users || []);
+        cachedUsersList = data.users || [];
+        renderUsers(cachedUsersList);
         renderLogs(data.loginLogs || []);
       } catch (err) {
         alert('데이터 로드 실패: ' + err.message);
@@ -163,12 +238,14 @@
 
           const statusBadge = u.status === 'ACTIVE'
             ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">정상</span>'
-            : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">차단</span>';
+            : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">정지</span>';
 
           return `
-            <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+            <tr class="hover:bg-blue-50/40 transition border-b border-slate-100">
               <td class="py-3 px-4 text-center font-mono text-slate-400">${u.user_no}</td>
-              <td class="py-3 px-4 font-bold text-slate-900">${u.user_id}</td>
+              <td class="py-3 px-4 font-bold text-blue-600 hover:text-blue-800 underline underline-offset-4 cursor-pointer" onclick="openEditUserModal('${u.user_id}')">
+                <i class="fa-solid fa-user-pen text-[10px] mr-1 opacity-70"></i>${u.user_id}
+              </td>
               <td class="py-3 px-4 text-slate-700">${u.nickname || '-'}</td>
               <td class="py-3 px-3 text-center">${roleBadge}</td>
               <td class="py-3 px-3 text-center">${statusBadge}</td>
@@ -187,21 +264,30 @@
             ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">ADMIN</span>'
             : '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">USER</span>';
 
+          const statusBadge = u.status === 'ACTIVE'
+            ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">정상</span>'
+            : '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">정지</span>';
+
           return `
             <div class="p-3 bg-white border-b border-slate-100 text-xs">
               <div class="flex justify-between items-center mb-1">
-                <div class="flex items-center gap-1.5">
-                  <span class="font-bold text-slate-900">${u.user_id}</span>
-                  <span class="text-slate-500">(${u.nickname || '닉네임 없음'})</span>
+                <button type="button" onclick="openEditUserModal('${u.user_id}')" class="flex items-center gap-1.5 font-bold text-blue-600 hover:underline">
+                  <i class="fa-solid fa-user-pen text-[10px]"></i>
+                  <span>${u.user_id}</span>
+                  <span class="text-slate-500 font-normal">(${u.nickname || '닉네임 없음'})</span>
+                </button>
+                <div class="flex items-center gap-1">
+                  ${roleBadge}
+                  ${statusBadge}
                 </div>
-                <div>${roleBadge}</div>
               </div>
               <div class="flex justify-between items-center text-[11px] text-slate-500 my-1">
                 <span>보유 계좌: <b class="text-blue-600">${u.account_count || 0}개</b></span>
                 <span class="font-mono">예수금 ₩${Number(u.cash_total || 0).toLocaleString()}</span>
               </div>
-              <div class="text-[10px] text-slate-400 pt-1 border-t border-slate-50">
-                가입일시: ${u.created_at || '-'}
+              <div class="text-[10px] text-slate-400 pt-1 border-t border-slate-50 flex justify-between">
+                <span>가입일: ${u.created_at || '-'}</span>
+                <span class="text-blue-600 font-semibold cursor-pointer" onclick="openEditUserModal('${u.user_id}')">관리 &gt;</span>
               </div>
             </div>
           `;
@@ -236,6 +322,155 @@
       }).join('');
     }
 
+    // 모달 제어 함수
+    function openEditUserModal(userId) {
+      const user = cachedUsersList.find(u => u.user_id === userId);
+      if (!user) return;
+
+      const modal = document.getElementById('editUserModal');
+      const inputId = document.getElementById('modalUserId');
+      const inputNick = document.getElementById('modalNickname');
+      const inputPw = document.getElementById('modalPassword');
+      const selectStatus = document.getElementById('modalStatus');
+      const errBox = document.getElementById('modalError');
+      const succBox = document.getElementById('modalSuccess');
+      const btnDelete = document.getElementById('btnDeleteUser');
+
+      if (errBox) errBox.classList.add('hidden');
+      if (succBox) succBox.classList.add('hidden');
+
+      if (inputId) inputId.value = user.user_id;
+      if (inputNick) inputNick.value = user.nickname || '';
+      if (inputPw) inputPw.value = '';
+      if (selectStatus) selectStatus.value = user.status || 'ACTIVE';
+
+      // 최고 관리자(antmaster84)는 삭제 및 정지 불가능하게 버튼 및 옵션 보호
+      if (user.user_id === 'antmaster84') {
+        if (btnDelete) btnDelete.classList.add('hidden');
+        if (selectStatus) selectStatus.disabled = true;
+      } else {
+        if (btnDelete) btnDelete.classList.remove('hidden');
+        if (selectStatus) selectStatus.disabled = false;
+      }
+
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeEditUserModal() {
+      const modal = document.getElementById('editUserModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function handleEditUserSubmit(e) {
+      e.preventDefault();
+      const userId = document.getElementById('modalUserId').value;
+      const nickname = document.getElementById('modalNickname').value.trim();
+      const password = document.getElementById('modalPassword').value;
+      const status = document.getElementById('modalStatus').value;
+
+      const errBox = document.getElementById('modalError');
+      const succBox = document.getElementById('modalSuccess');
+      const btnSubmit = document.getElementById('btnEditSubmit');
+
+      if (errBox) errBox.classList.add('hidden');
+      if (succBox) succBox.classList.add('hidden');
+
+      if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = '수정 처리 중...';
+      }
+
+      const payload = { user_id: userId, nickname, status };
+      if (password && password.trim().length > 0) {
+        if (password.trim().length < 4) {
+          alert('비밀번호는 4자 이상이어야 합니다.');
+          if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = '수정 완료';
+          }
+          return;
+        }
+        payload.password = password.trim();
+      }
+
+      try {
+        const res = await fetch('/api/admin-users', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (result.success) {
+          if (succBox) {
+            succBox.textContent = result.message || '수정되었습니다.';
+            succBox.classList.remove('hidden');
+          }
+          setTimeout(async () => {
+            closeEditUserModal();
+            await loadAdminData();
+          }, 800);
+        } else {
+          if (errBox) {
+            errBox.textContent = result.error || '수정 실패';
+            errBox.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (errBox) {
+          errBox.textContent = '서버 통신 오류: ' + err.message;
+          errBox.classList.remove('hidden');
+        }
+      } finally {
+        if (btnSubmit) {
+          btnSubmit.disabled = false;
+          btnSubmit.textContent = '수정 완료';
+        }
+      }
+    }
+
+    async function handleDeleteUserClick() {
+      const userId = document.getElementById('modalUserId').value;
+      if (!userId) return;
+
+      if (userId === 'antmaster84') {
+        alert('최고 관리자 계정은 삭제할 수 없습니다.');
+        return;
+      }
+
+      if (!confirm(`정말 [${userId}] 회원을 영구 삭제하시겠습니까?\n해당 회원의 개설 계좌 및 거래내역, 스냅샷 데이터도 함께 영구 삭제됩니다.`)) {
+        return;
+      }
+
+      const btnDelete = document.getElementById('btnDeleteUser');
+      if (btnDelete) {
+        btnDelete.disabled = true;
+        btnDelete.textContent = '삭제 중...';
+      }
+
+      try {
+        const res = await fetch(`/api/admin-users?user_id=${userId}`, {
+          method: 'DELETE'
+        });
+        const result = await res.json();
+
+        if (result.success) {
+          alert(result.message || '회원이 삭제되었습니다.');
+          closeEditUserModal();
+          await loadAdminData();
+        } else {
+          alert('삭제 실패: ' + (result.error || '알 수 없는 오류'));
+        }
+      } catch (err) {
+        alert('서버 통신 오류: ' + err.message);
+      } finally {
+        if (btnDelete) {
+          btnDelete.disabled = false;
+          btnDelete.innerHTML = '<i class="fa-solid fa-trash-can text-[11px]"></i> <span>삭제</span>';
+        }
+      }
+    }
+
     async function handleAppLogout() {
       if (!confirm('로그아웃 하시겠습니까?')) return;
       try {
@@ -243,6 +478,13 @@
       } catch (_) {}
       window.location.replace('../index.html?logout=' + Date.now());
     }
+
+    document.addEventListener('click', (e) => {
+      const modal = document.getElementById('editUserModal');
+      if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+        closeEditUserModal();
+      }
+    });
 
     document.addEventListener('DOMContentLoaded', loadAdminData);
   </script>

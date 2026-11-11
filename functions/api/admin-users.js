@@ -77,8 +77,7 @@ export async function onRequestGet(context) {
         const logsResult = await db.prepare(`
             SELECT log_id, user_id, ip_address, user_agent, login_status, attempt_time
             FROM login_logs
-            ORDER BY log_id DESC
-            LIMIT 50
+            ORDER BY log_id DESC            
         `).all();
 
         return new Response(JSON.stringify({

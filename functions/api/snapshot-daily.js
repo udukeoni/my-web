@@ -72,7 +72,7 @@ export async function onRequestPost(context) {
             userSummaryMap[userId].net_worth += accNetWorth;
         }
 
-        // 4. 💡 모든 사용자(antmaster84, workerant01, workerant02 등)별 고유 전체 종합 스냅샷 생성 ({user_id}_ALL)
+        // 4. 모든 사용자(antmaster84, workerant01 등)별 고유 전체 종합 스냅샷 생성 ({user_id}_ALL 단일 표준)
         for (const [userId, summary] of Object.entries(userSummaryMap)) {
             const userTotalKey = `${userId}_ALL`;
 
@@ -86,20 +86,6 @@ export async function onRequestPost(context) {
                         updated_at = excluded.updated_at
                 `).bind(dateStr, userTotalKey, Number(summary.invested), Number(summary.net_worth), String(kstDateTimeStr))
             );
-
-            // antmaster84는 과거 데이터 하위호환을 위해 기존 'ALL' 레코드도 함께 동기화
-            if (userId === 'antmaster84') {
-                statements.push(
-                    db.prepare(`
-                        INSERT INTO daily_snapshots (snapshot_date, account_id, invested, net_worth, updated_at)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(snapshot_date, account_id) DO UPDATE SET
-                            invested = excluded.invested,
-                            net_worth = excluded.net_worth,
-                            updated_at = excluded.updated_at
-                    `).bind(dateStr, 'ALL', Number(summary.invested), Number(summary.net_worth), String(kstDateTimeStr))
-                );
-            }
         }
 
         if (statements.length > 0) {

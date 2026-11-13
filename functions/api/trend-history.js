@@ -8,54 +8,64 @@ export async function onRequestGet(context) {
     const period = url.searchParams.get('period') || '1W';
     const accountFilter = url.searchParams.get('account') || 'ALL';
 
+    const cookieHeader = request.headers.get('Cookie') || '';
+    const cookies = Object.fromEntries(
+        cookieHeader.split(';').map(c => {
+            const [k, ...v] = c.trim().split('=');
+            return [k, v.join('=')];
+        })
+    );
+    let sessionUser = 'antmaster84';
+    if (cookies['auth_token']) {
+        try {
+            const decoded = decodeURIComponent(escape(atob(cookies['auth_token'])));
+            const s = JSON.parse(decoded);
+            if (s && s.user_id) sessionUser = s.user_id;
+        } catch (_) {}
+    }
+
     try {
         const db = env.DB;
 
         // 1. 전체 계좌 목록 및 한글명 맵핑
-        const accountsResult = await db.prepare("SELECT account_id, account_name FROM accounts ORDER BY account_id ASC").all();
+        const accountsResult = await db.prepare("SELECT account_id, account_name FROM accounts WHERE user_id = ? ORDER BY account_id ASC").bind(sessionUser).all();
         const accounts = accountsResult.results || [];
         const accountNameMap = { 'ALL': '전체 계좌 종합' };
         accounts.forEach(a => {
             accountNameMap[a.account_id] = a.account_name;
         });
 
-        // 2. daily_snapshots 기반 기간별 조건 분기
+        // 2. 전체 계좌 종합 조회 시 {sessionUser}_ALL 단일 표준 키 적용
+        let targetKey = accountFilter;
+        if (accountFilter === 'ALL') {
+            targetKey = `${sessionUser}_ALL`;
+        }
+
         let query = `
             SELECT snapshot_date as time_label, account_id, net_worth, invested 
             FROM daily_snapshots 
+            WHERE account_id = ?
         `;
-        const conditions = [];
-        const params = [];
-
-        if (accountFilter !== 'ALL') {
-            conditions.push("account_id = ?");
-            params.push(accountFilter);
-        }
+        const params = [targetKey];
 
         if (period === '1W') {
-            // 최근 7일 이내
             const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            conditions.push("snapshot_date >= ?");
+            query += " AND snapshot_date >= ?";
             params.push(cutoff);
         } else if (period === '1M') {
-            // 최근 30일 이내
             const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            conditions.push("snapshot_date >= ?");
+            query += " AND snapshot_date >= ?";
             params.push(cutoff);
         } else if (period === '3M') {
-            // 최근 90일 이내
             const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            conditions.push("snapshot_date >= ?");
+            query += " AND snapshot_date >= ?";
             params.push(cutoff);
         }
 
-        if (conditions.length > 0) {
-            query += " WHERE " + conditions.join(" AND ");
-        }
-        query += " ORDER BY snapshot_date DESC, account_id ASC";
+        query += " ORDER BY snapshot_date DESC";
 
         const stmt = db.prepare(query);
-        const res = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
+        const res = await stmt.bind(...params).all();
         const rows = res.results || [];
 
         // 3. 손익금 및 수익률 계산 매핑

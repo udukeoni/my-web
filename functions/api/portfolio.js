@@ -106,12 +106,11 @@ export async function onRequestGet(context) {
                 holdingsConditions.push(`h.account_id IN (${placeholders})`);
                 holdingsParams.push(...myAccountIds);
             } else {
-                // 본인 소유 계좌인지 검증
                 if (myAccountIds.includes(accountFilter)) {
                     holdingsConditions.push("h.account_id = ?");
                     holdingsParams.push(accountFilter);
                 } else {
-                    holdingsConditions.push("1 = 0"); // 타인 계좌 조회 차단
+                    holdingsConditions.push("1 = 0");
                 }
             }
 
@@ -291,26 +290,17 @@ export async function onRequestGet(context) {
             };
         });
 
-        // 8. 💡 [핵심] 차트 스냅샷 데이터 계정주(user_id) 완전 격리 조회
+        // 8. 차트 스냅샷 데이터 계정주(user_id) 완전 격리 조회 ({currentUserId}_ALL 표준 적용)
         let dailyHistory = [];
         try {
             if (accountFilter === 'ALL') {
-                if (currentUserId === 'antmaster84') {
-                    // antmaster84는 기존 누적 기록 보존을 위해 'ALL' 또는 'antmaster84_ALL' 조회
-                    const dailyStmt = db.prepare(
-                        "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = 'ALL' OR account_id = 'antmaster84_ALL' ORDER BY snapshot_date ASC"
-                    );
-                    const dailyRes = await dailyStmt.all();
-                    dailyHistory = dailyRes.results || [];
-                } else {
-                    // 일반 회원은 오직 자기 자신의 총합 스냅샷({user_id}_ALL)만 조회
-                    const userTotalKey = `${currentUserId}_ALL`;
-                    const dailyStmt = db.prepare(
-                        "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = ? ORDER BY snapshot_date ASC"
-                    ).bind(userTotalKey);
-                    const dailyRes = await dailyStmt.all();
-                    dailyHistory = dailyRes.results || [];
-                }
+                // 관리자와 일반 회원 모두 예외 없이 {currentUserId}_ALL 단일 키로만 조회
+                const userTotalKey = `${currentUserId}_ALL`;
+                const dailyStmt = db.prepare(
+                    "SELECT snapshot_date, net_worth, invested FROM daily_snapshots WHERE account_id = ? ORDER BY snapshot_date ASC"
+                ).bind(userTotalKey);
+                const dailyRes = await dailyStmt.all();
+                dailyHistory = dailyRes.results || [];
             } else {
                 // 개별 계좌 조회 시 본인 소유 계좌만 조회
                 if (myAccountIds.includes(accountFilter)) {

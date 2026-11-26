@@ -26,7 +26,12 @@
   <main class="max-w-6xl mx-auto p-3 sm:p-6 space-y-3 sm:space-y-5">
     
     <!-- 0. 상단 헤더 바 -->
-    <nav class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium whitespace-nowrap">
+    <header class="bg-white px-3.5 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between gap-2 select-none">
+      <h1 class="font-bold text-base sm:text-xl text-slate-900 whitespace-nowrap tracking-tight">
+        자산 대시보드
+      </h1>
+
+      <nav class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium whitespace-nowrap">
         <!-- 공포탐욕지수 링크 -->
         <a href="../index.html" title="공포탐욕지수" 
            class="text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition p-2 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5">
@@ -55,6 +60,7 @@
           <span class="hidden md:inline font-bold">로그아웃</span>
         </button>
       </nav>
+    </header>
     
     <!-- 1. 상단 컨트롤 바 -->
     <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">

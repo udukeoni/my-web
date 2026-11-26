@@ -161,22 +161,12 @@ function renderDataTable(viewType, dataList) {
     currentDataList = dataList || [];
 
     const headerContainer = title ? title.closest('.flex.items-center.justify-between') : null;
-    
-    // 💡 타이틀 컨테이너와 타이틀 자체에 줄바꿈 방지(whitespace-nowrap) 강제 적용
-    if (title) {
-        title.classList.add('whitespace-nowrap', 'shrink-0');
-        const titleParent = title.parentElement;
-        if (titleParent) {
-            titleParent.classList.add('flex', 'items-center', 'gap-2', 'min-w-0', 'whitespace-nowrap');
-        }
-    }
-
     let btnOpenModal = document.getElementById('btnOpenTxModal');
     if (headerContainer && !btnOpenModal) {
         btnOpenModal = document.createElement('button');
         btnOpenModal.id = 'btnOpenTxModal';
         btnOpenModal.type = 'button';
-        btnOpenModal.className = 'hidden items-center gap-1.5 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-md transition shadow-sm active:scale-95 whitespace-nowrap';
+        btnOpenModal.className = 'hidden items-center gap-1.5 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-md transition shadow-sm active:scale-95';
         btnOpenModal.innerHTML = '<i class="fa-solid fa-plus text-[10px]"></i> 거래내역 입력';
         headerContainer.appendChild(btnOpenModal);
     }
@@ -186,22 +176,20 @@ function renderDataTable(viewType, dataList) {
         const isSupported = isRebalanceSupportedAccount(selectedAcc);
         const showWideRebalance = isSupported && isRebalanceExpanded;
 
-        // 💡 [핵심 요청 반영] 확장 시 '밴드리밸런싱', 축소 시 '보유종목상세'
         if (title) title.textContent = showWideRebalance ? '밴드리밸런싱' : '보유종목상세';
 
-        // 💡 [핵심] 모바일용 종목 배지 및 확장/축소 버튼 한 덩어리로 묶고 줄바꿈 방지
+        // 💡 [핵심] 모바일용 종목 배지 뒤에 [] (확장/축소) 버튼 배치
         if (badge) {
-            badge.classList.add('whitespace-nowrap', 'shrink-0');
             const countText = `${currentDataList.length}종목`;
             if (isSupported) {
                 const iconHtml = showWideRebalance 
                     ? '<i class="fa-solid fa-compress text-[10px] ml-1"></i>' 
                     : '<i class="fa-solid fa-expand text-[10px] ml-1"></i>';
-                const actionTitle = showWideRebalance ? '보유 종목 상세로 축소' : '밴드리밸런싱 모드로 확장';
+                const actionTitle = showWideRebalance ? '기본 종목 상세로 축소' : '자산배분 밴드리밸런싱 모드로 확장';
                 
                 badge.innerHTML = `
-                    <span class="whitespace-nowrap">${countText}</span>
-                    <button type="button" id="btnBadgeToggleRebalance" title="${actionTitle}" class="ml-1 px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold text-[10px] inline-flex items-center active:scale-95 transition whitespace-nowrap">
+                    <span>${countText}</span>
+                    <button type="button" id="btnBadgeToggleRebalance" title="${actionTitle}" class="ml-1 px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold text-[10px] inline-flex items-center active:scale-95 transition">
                         ${iconHtml}
                     </button>
                 `;
@@ -621,6 +609,7 @@ function renderPaginatedRows() {
                     `;
                 }
 
+                // 💡 [수정] 카드 비중 배지에서 불필요한 토글 아이콘을 빼고 깔끔하게 표시
                 return `
                     <div class="py-2.5 px-3 bg-white border-b border-slate-100 text-xs">
                         <div class="flex justify-between items-center mb-1.5">
@@ -685,6 +674,7 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
+            // 💡 [수정] 기본 모드 모바일 카드: 비중 배지에서 확장 기능 제거하고 단독 표시
             mobileList.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';
@@ -753,128 +743,82 @@ function renderPaginatedRows() {
         }
 
     } else {
-        const titles = {
-            ALL_LOGS: '전체 거래 내역',
-            TRADE: '매수 / 매도 내역',
-            DIVIDEND: '분배금 내역',
-            TRANSFER: '입금 / 출금 / 이자 내역'
-        };
-        if (title) title.textContent = titles[viewType] || '원장 거래 내역';
-        if (badge) badge.textContent = `${currentDataList.length}건`;
+        tbody.innerHTML = pageItems.map(item => {
+            let badgeStyle = "bg-slate-100 text-slate-700";
+            if (item.trade_type === '매수') badgeStyle = "bg-red-50 text-red-600";
+            if (item.trade_type === '매도') badgeStyle = "bg-blue-50 text-blue-600";
+            if (item.trade_type === '분배금' || item.trade_type === '배당금') badgeStyle = "bg-emerald-50 text-emerald-600";
+            if (item.trade_type === '이자') badgeStyle = "bg-amber-50 text-amber-700";
+            if (item.trade_type === '입금') badgeStyle = "bg-purple-50 text-purple-600";
+            if (item.trade_type === '출금') badgeStyle = "bg-gray-100 text-gray-600";
 
-        if (btnOpenModal) {
-            btnOpenModal.classList.remove('hidden');
-            btnOpenModal.classList.add('inline-flex');
-        }
+            let itemDisplayName = item.display_asset_name || item.ticker;
+            if (item.ticker === 'CASH') itemDisplayName = '원화 현금';
+            else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
 
-        thead.innerHTML = `
-            <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold border-b border-slate-200 select-none whitespace-nowrap">
-              <th class="py-2 px-3 text-left">거래일자</th>
-              <th class="py-2 px-2.5 text-left">계좌</th>
-              <th class="py-2 px-2 text-center">구분</th>
-              <th class="py-2 px-3 text-left">종목</th>
-              <th class="py-2 px-2.5 text-right">수량</th>
-              <th class="py-2 px-2.5 text-right">단가</th>
-              <th class="py-2 px-3 text-right">정산금액</th>
-              <th class="py-2 px-2.5 text-right">세금</th>
-              <th class="py-2 px-3 text-left">메모</th>
-            </tr>
-        `;
-    }
+            const isTransfer = (item.trade_type === '출금' || item.trade_type === '입금');
+            const taxVal = (item.fee !== undefined && item.fee !== null) ? item.fee : (item.tax || 0);
+            const taxText = isTransfer ? '₩0' : (taxVal ? '₩' + Number(taxVal).toLocaleString() : '₩0');
 
-    renderPaginatedRows();
-    updatePaginationControls();
+            const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
 
-    if (isTargetWeightEditMode) {
-        const inputs = document.querySelectorAll('.target-weight-input');
-        inputs.forEach(inp => {
-            inp.addEventListener('input', () => {
-                updateTargetHeaderLiveSum();
-            });
-        });
-        updateTargetHeaderLiveSum();
-    }
-}
+            return `
+                <tr class="transition border-b border-slate-100 text-[11px] leading-tight cursor-pointer hover:bg-blue-50/40 tx-editable-row" data-tx="${itemJson}">
+                  <td class="py-2 px-3 font-mono text-slate-600 whitespace-nowrap">${item.trade_date}</td>
+                  <td class="py-2 px-2.5 font-medium text-slate-800 whitespace-nowrap">${item.account_name || item.account_id}</td>
+                  <td class="py-2 px-2 text-center whitespace-nowrap">
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap inline-block ${badgeStyle}">${item.trade_type}</span>
+                  </td>
+                  <td class="py-2 px-3">
+                    <div class="font-bold text-slate-900 whitespace-nowrap">${itemDisplayName}</div>
+                  </td>
+                  <td class="py-2 px-2.5 text-right font-mono whitespace-nowrap">${item.quantity ? Number(item.quantity).toLocaleString() : '-'}</td>
+                  <td class="py-2 px-2.5 text-right font-mono whitespace-nowrap">${item.unit_price ? '₩' + Number(item.unit_price).toLocaleString() : '-'}</td>
+                  <td class="py-2 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">₩${Number(item.settle_amount || 0).toLocaleString()}</td>
+                  <td class="py-2 px-2.5 text-right font-mono text-slate-500 whitespace-nowrap">${taxText}</td>
+                  <td class="py-2 px-3 text-slate-400 truncate max-w-[140px] whitespace-nowrap">${item.memo || ''}</td>
+                </tr>
+            `;
+        }).join('');
 
-async function saveTargetWeightsAndRecalculate() {
-    const mobileContainer = document.getElementById('mobileCardList');
-    const tableContainer = document.getElementById('tableBody');
-    
-    let inputs = [];
-    if (mobileContainer && window.getComputedStyle(mobileContainer).display !== 'none') {
-        inputs = mobileContainer.querySelectorAll('.target-weight-input');
-    }
-    if (!inputs || inputs.length === 0) {
-        if (tableContainer) {
-            inputs = tableContainer.querySelectorAll('.target-weight-input');
-        }
-    }
-    if (!inputs || inputs.length === 0) {
-        inputs = document.querySelectorAll('.target-weight-input');
-    }
+        mobileList.innerHTML = pageItems.map(item => {
+            let badgeStyle = "bg-slate-100 text-slate-700";
+            if (item.trade_type === '매수') badgeStyle = "bg-red-50 text-red-600";
+            if (item.trade_type === '매도') badgeStyle = "bg-blue-50 text-blue-600";
+            if (item.trade_type === '분배금' || item.trade_type === '배당금') badgeStyle = "bg-emerald-50 text-emerald-600";
+            if (item.trade_type === '이자') badgeStyle = "bg-amber-50 text-amber-700";
+            if (item.trade_type === '입금') badgeStyle = "bg-purple-50 text-purple-600";
+            if (item.trade_type === '출금') badgeStyle = "bg-gray-100 text-gray-600";
 
-    const updates = [];
-    const updatedMap = new Map();
+            let itemDisplayName = item.display_asset_name || item.ticker;
+            if (item.ticker === 'CASH') itemDisplayName = '원화 현금';
+            else if (item.trade_type === '이자') itemDisplayName = `${item.account_name || item.account_id} 이자`;
 
-    inputs.forEach(input => {
-        const ticker = input.dataset.ticker;
-        const val = parseFloat(input.value);
-        if (ticker && !isNaN(val) && val >= 0) {
-            if (!updatedMap.has(ticker)) {
-                updates.push({ ticker, target_weight: val });
-                updatedMap.set(ticker, val);
-            }
-        }
-    });
+            const isTransfer = (item.trade_type === '출금' || item.trade_type === '입금');
+            const taxVal = (item.fee !== undefined && item.fee !== null) ? item.fee : (item.tax || 0);
+            const mobileTaxText = (!isTransfer && taxVal) ? '세금 ₩' + Number(taxVal).toLocaleString() : '';
+            const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
 
-    const activeAccount = (typeof currentAccount !== 'undefined') ? currentAccount : 'SAMSUNG_ISA';
-
-    try {
-        const res = await fetch('/api/rebalance', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                account_id: activeAccount,
-                updates: updates
-            })
-        });
-        const result = await res.json();
-        if (!result.success) throw new Error(result.error || '목표비중 저장 실패');
-
-        let totalNetWorth = 0;
-        if (typeof cachedSummary !== 'undefined' && cachedSummary && cachedSummary.netWorth) {
-            totalNetWorth = Number(cachedSummary.netWorth);
-        } else {
-            totalNetWorth = currentDataList.reduce((sum, item) => sum + (Number(item.eval_amount) || 0), 0);
-        }
-
-        currentDataList.forEach(item => {
-            if (updatedMap.has(item.ticker)) {
-                const newTarget = updatedMap.get(item.ticker);
-                const newBandMin = Number((newTarget * 0.8).toFixed(2));
-                const newBandMax = Number((newTarget * 1.2).toFixed(2));
-                const currentEval = Number(item.eval_amount) || 0;
-
-                const targetEval = totalNetWorth * (newTarget / 100);
-                const diffAmount = Math.round(targetEval - currentEval);
-                let adjustShares = 0;
-                if (!item.isCash && item.current_price > 0) {
-                    adjustShares = Math.round(diffAmount / item.current_price);
-                }
-
-                item.target_weight = newTarget;
-                item.band_min = newBandMin;
-                item.band_max = newBandMax;
-                item.diff_amount = diffAmount;
-                item.adjust_shares = adjustShares;
-            }
-        });
-
-        isTargetWeightEditMode = false;
-        renderDataTable('HOLDINGS', currentDataList);
-
-    } catch (err) {
-        alert('목표비중 수정 중 오류가 발생했습니다: ' + err.message);
+            return `
+                <div class="py-2 px-2.5 bg-white border-b border-slate-100 text-xs cursor-pointer hover:bg-slate-50 tx-editable-row" data-tx="${itemJson}">
+                    <div class="flex justify-between items-center mb-1">
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-bold text-slate-800">${item.account_name || item.account_id}</span>
+                            <span class="px-1.5 py-0.5 rounded font-bold text-[10px] whitespace-nowrap ${badgeStyle}">${item.trade_type}</span>
+                        </div>
+                        <div class="font-mono text-slate-400 text-[10px]">${item.trade_date}</div>
+                    </div>
+                    <div class="flex justify-between items-center font-medium">
+                        <span class="font-bold text-slate-900">${itemDisplayName}</span>
+                        <span class="font-mono font-bold text-slate-900">₩${Number(item.settle_amount || 0).toLocaleString()}</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-50 mt-1">
+                        <span>${item.memo || '-'}</span>
+                        <span>${mobileTaxText}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
 }
 

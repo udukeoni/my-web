@@ -126,12 +126,28 @@ function calculateSmartRebalance(items) {
         item._calculatedStatus = initialStatus;
         item._buyPriority = null;
         item._rescueCost = 0;
+        item._sellExcessCost = 0;
+        item._sellExcessShares = 0;
 
+        // 💡 밴드하한 복귀 최소매수필요액 산출
         if (initialStatus === '매수' && dynamicBandMin !== null) {
             const minRequiredEval = totalNetWorth * (dynamicBandMin / 100.0);
             const rescueCost = Math.max(0, Math.round(minRequiredEval - curEval));
             item._rescueCost = rescueCost;
             buyCandidates.push(item);
+        }
+
+        // 💡 밴드상한 복귀 최소매도액 및 최소매도주수 산출
+        if (initialStatus === '매도' && dynamicBandMax !== null) {
+            const maxAllowedEval = totalNetWorth * (dynamicBandMax / 100.0);
+            const excessCost = Math.max(0, Math.round(curEval - maxAllowedEval));
+            item._sellExcessCost = excessCost;
+
+            if (!item.isCash && item.current_price > 0) {
+                item._sellExcessShares = Math.ceil(excessCost / item.current_price);
+            } else {
+                item._sellExcessShares = 0;
+            }
         }
     });
 
@@ -178,7 +194,6 @@ function renderDataTable(viewType, dataList) {
 
         if (title) title.textContent = showWideRebalance ? '밴드리밸런싱' : '보유종목상세';
 
-        // 💡 [핵심] 모바일용 종목 배지 뒤에 [] (확장/축소) 버튼 배치
         if (badge) {
             const countText = `${currentDataList.length}종목`;
             if (isSupported) {
@@ -464,6 +479,7 @@ function renderPaginatedRows() {
                 const calculatedStatus = item._calculatedStatus || '-';
                 const buyPriority = item._buyPriority;
 
+                // 💡 [핵심] 매수/매도 툴팁: 매수 시 최소필요액, 매도 시 최소매도액 + 최소주수 표출
                 let statusBadge = '<span class="text-slate-400 font-bold">-</span>';
                 if (calculatedStatus === '유지') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 유지</span>';
@@ -472,7 +488,9 @@ function renderPaginatedRows() {
                     const rescueTip = item._rescueCost ? ` title="밴드하한 복귀 최소필요액: ₩${item._rescueCost.toLocaleString()}"` : '';
                     statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse cursor-help"${rescueTip}>${priorityText}</span>`;
                 } else if (calculatedStatus === '매도') {
-                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">🔴 매도</span>';
+                    const sharesText = (!item.isCash && item._sellExcessShares > 0) ? ` (최소 ${item._sellExcessShares.toLocaleString()}주)` : '';
+                    const sellTip = item._sellExcessCost ? ` title="밴드상한 복귀 최소매도액: ₩${item._sellExcessCost.toLocaleString()}${sharesText}"` : '';
+                    statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse cursor-help"${sellTip}>🔴 매도</span>`;
                 }
 
                 let diffText = '₩0';
@@ -565,9 +583,12 @@ function renderPaginatedRows() {
                     statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">✅ 유지</span>';
                 } else if (calculatedStatus === '매수') {
                     const priorityText = buyPriority ? `🔵 매수 ${buyPriority}` : '🔵 매수';
-                    statusBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700">${priorityText}</span>`;
+                    const rescueTip = item._rescueCost ? ` title="밴드하한 복귀 최소필요액: ₩${item._rescueCost.toLocaleString()}"` : '';
+                    statusBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700"${rescueTip}>${priorityText}</span>`;
                 } else if (calculatedStatus === '매도') {
-                    statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">🔴 매도</span>';
+                    const sharesText = (!item.isCash && item._sellExcessShares > 0) ? ` (최소 ${item._sellExcessShares.toLocaleString()}주)` : '';
+                    const sellTip = item._sellExcessCost ? ` title="밴드상한 복귀 최소매도액: ₩${item._sellExcessCost.toLocaleString()}${sharesText}"` : '';
+                    statusBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700"${sellTip}>🔴 매도</span>`;
                 }
 
                 let diffText = '₩0';
@@ -609,7 +630,6 @@ function renderPaginatedRows() {
                     `;
                 }
 
-                // 💡 [수정] 카드 비중 배지에서 불필요한 토글 아이콘을 빼고 깔끔하게 표시
                 return `
                     <div class="py-2.5 px-3 bg-white border-b border-slate-100 text-xs">
                         <div class="flex justify-between items-center mb-1.5">
@@ -674,7 +694,6 @@ function renderPaginatedRows() {
                 `;
             }).join('');
 
-            // 💡 [수정] 기본 모드 모바일 카드: 비중 배지에서 확장 기능 제거하고 단독 표시
             mobileList.innerHTML = pageItems.map(item => {
                 const isPositive = Number(item.profit_amount || 0) >= 0;
                 const profitColor = isPositive ? 'text-red-500' : 'text-blue-500';

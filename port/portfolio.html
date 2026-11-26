@@ -26,28 +26,35 @@
   <main class="max-w-6xl mx-auto p-3 sm:p-6 space-y-3 sm:space-y-5">
     
     <!-- 0. 상단 헤더 바 -->
-    <header class="bg-white px-3.5 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between gap-2 select-none">
-      <h1 class="font-bold text-base sm:text-xl text-slate-900 whitespace-nowrap tracking-tight">
-        자산 대시보드
-      </h1>
+    <nav class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium whitespace-nowrap">
+        <!-- 공포탐욕지수 링크 -->
+        <a href="../index.html" title="공포탐욕지수" 
+           class="text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition p-2 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5">
+          <i class="fa-solid fa-gauge-high text-sm sm:text-xs"></i>
+          <span class="hidden md:inline">공포탐욕지수</span>
+        </a>
 
-      <nav class="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium whitespace-nowrap">
-        <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition py-1">공포탐욕지수</a>
-        <a href="portfolio.html" class="text-blue-600 border-b-2 border-blue-600 pb-0.5 font-bold">포트폴리오</a>
-        
-        <!-- 💡 [신규] 관리자 전용 사용자관리 메뉴 링크 (기본 hidden, 관리자 확인 시 표시) -->
-        <a id="navAdminUsers" href="admin-users.html" class="hidden text-slate-500 hover:text-blue-600 transition py-1 flex items-center gap-1 font-semibold">
-          <i class="fa-solid fa-users-gear text-xs text-blue-500"></i>
-          <span>사용자관리</span>
+        <!-- 포트폴리오 (현재 페이지 활성화) -->
+        <a href="portfolio.html" title="포트폴리오" 
+           class="text-blue-600 bg-blue-50 font-bold p-2 sm:px-3 sm:py-1.5 rounded-lg border border-blue-200 flex items-center gap-1.5">
+          <i class="fa-solid fa-chart-pie text-sm sm:text-xs"></i>
+          <span class="hidden md:inline">포트폴리오</span>
+        </a>
+
+        <!-- 사용자관리 링크 (관리자 전용) -->
+        <a href="admin-users.html" id="navAdminUsers" title="사용자 관리" 
+           class="text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition p-2 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5">
+          <i class="fa-solid fa-users-gear text-sm sm:text-xs"></i>
+          <span class="hidden md:inline">사용자관리</span>
         </a>
         
-        <button id="btnLogout" type="button" onclick="handleAppLogout(event)" title="로그아웃" 
-                class="text-slate-500 hover:text-red-600 p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-50 hover:bg-red-50 transition flex items-center gap-1 border border-slate-200 active:scale-95 cursor-pointer">
-          <i class="fa-solid fa-arrow-right-from-bracket text-xs sm:text-[11px]"></i>
-          <span class="hidden sm:inline font-bold text-xs">로그아웃</span>
+        <!-- 로그아웃 버튼 -->
+        <button type="button" onclick="handleAppLogout()" title="로그아웃" 
+                class="text-slate-500 hover:text-red-600 p-2 sm:px-3 sm:py-1.5 rounded-lg bg-slate-50 hover:bg-red-50 transition flex items-center gap-1.5 border border-slate-200 active:scale-95 cursor-pointer ml-1">
+          <i class="fa-solid fa-arrow-right-from-bracket text-sm sm:text-xs"></i>
+          <span class="hidden md:inline font-bold">로그아웃</span>
         </button>
       </nav>
-    </header>
     
     <!-- 1. 상단 컨트롤 바 -->
     <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">

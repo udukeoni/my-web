@@ -12,6 +12,69 @@ let isTargetWeightEditMode = false;
 const mobilePriceViewToggle = new Map();
 const mobileProfitViewToggle = new Map();
 
+// 모바일 툴팁 타이머 전역 관리
+let mobileTooltipTimer = null;
+
+function hideMobileTooltip() {
+    const existing = document.getElementById('mobileRebalanceTooltip');
+    if (existing) existing.remove();
+    if (mobileTooltipTimer) {
+        clearTimeout(mobileTooltipTimer);
+        mobileTooltipTimer = null;
+    }
+}
+
+function showMobileTooltip(triggerElem, text) {
+    hideMobileTooltip();
+    if (!text) return;
+
+    const tooltip = document.createElement('div');
+    tooltip.id = 'mobileRebalanceTooltip';
+    tooltip.className = 'fixed z-[9999] bg-slate-900/95 text-white text-[11px] font-medium py-1.5 px-3 rounded-lg shadow-xl pointer-events-none transition-all duration-200 border border-slate-700/60 max-w-[260px] text-center leading-snug animate-in fade-in zoom-in-95';
+    tooltip.textContent = text;
+    document.body.appendChild(tooltip);
+
+    const rect = triggerElem.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+
+    let left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+    let top = rect.top - tooltipRect.height - 6;
+
+    // 화면 좌우 넘침 방지
+    if (left < 10) left = 10;
+    if (left + tooltipRect.width > window.innerWidth - 10) {
+        left = window.innerWidth - tooltipRect.width - 10;
+    }
+
+    // 화면 상단 넘침 시 아래에 표시
+    if (top < 10) {
+        top = rect.bottom + 6;
+    }
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+
+    // 3초 후 자동 소멸
+    mobileTooltipTimer = setTimeout(() => {
+        hideMobileTooltip();
+    }, 3000);
+}
+
+// 화면 다른 곳 터치/클릭 시 툴팁 닫기
+if (typeof window !== 'undefined' && !window.__mobileTooltipBound) {
+    window.__mobileTooltipBound = true;
+    document.addEventListener('touchstart', (e) => {
+        if (!e.target.closest('.mobile-rebalance-status-badge')) {
+            hideMobileTooltip();
+        }
+    }, { passive: true });
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.mobile-rebalance-status-badge')) {
+            hideMobileTooltip();
+        }
+    });
+}
+
 function isRebalanceSupportedAccount(accId) {
     const acc = accId || (typeof currentAccount !== 'undefined' ? currentAccount : 'ALL');
     return acc === 'MIRAE_PENSION' || 
@@ -126,18 +189,25 @@ function calculateSmartRebalance(items) {
         item._calculatedStatus = initialStatus;
         item._buyPriority = null;
         item._rescueCost = 0;
+        item._rescueShares = 0;
         item._sellExcessCost = 0;
         item._sellExcessShares = 0;
 
-        // 💡 밴드하한 복귀 최소매수필요액 산출
+        // 💡 밴드하한 복귀 최소매수필요액 및 최소매수주수
         if (initialStatus === '매수' && dynamicBandMin !== null) {
             const minRequiredEval = totalNetWorth * (dynamicBandMin / 100.0);
             const rescueCost = Math.max(0, Math.round(minRequiredEval - curEval));
             item._rescueCost = rescueCost;
+
+            if (!item.isCash && item.current_price > 0) {
+                item._rescueShares = Math.ceil(rescueCost / item.current_price);
+            } else {
+                item._rescueShares = 0;
+            }
             buyCandidates.push(item);
         }
 
-        // 💡 밴드상한 복귀 최소매도액 및 최소매도주수 산출
+        // 💡 밴드상한 복귀 최소매도액 및 최소매도주수
         if (initialStatus === '매도' && dynamicBandMax !== null) {
             const maxAllowedEval = totalNetWorth * (dynamicBandMax / 100.0);
             const excessCost = Math.max(0, Math.round(curEval - maxAllowedEval));
@@ -479,17 +549,18 @@ function renderPaginatedRows() {
                 const calculatedStatus = item._calculatedStatus || '-';
                 const buyPriority = item._buyPriority;
 
-                // 💡 [핵심] 매수/매도 툴팁: 매수 시 최소필요액, 매도 시 최소매도액 + 최소주수 표출
+                // 💡 [PC 툴팁] 매수 시 최소필요액 + 주수, 매도 시 최소매도액 + 주수
                 let statusBadge = '<span class="text-slate-400 font-bold">-</span>';
                 if (calculatedStatus === '유지') {
                     statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 유지</span>';
                 } else if (calculatedStatus === '매수') {
                     const priorityText = buyPriority ? `🔵 매수 ${buyPriority}` : '🔵 매수';
-                    const rescueTip = item._rescueCost ? ` title="밴드하한 복귀 최소필요액: ₩${item._rescueCost.toLocaleString()}"` : '';
+                    const buySharesText = (!item.isCash && item._rescueShares > 0) ? ` (최소 ${item._rescueShares.toLocaleString()}주)` : '';
+                    const rescueTip = item._rescueCost ? ` title="밴드하한 복귀 최소필요액: ₩${item._rescueCost.toLocaleString()}${buySharesText}"` : '';
                     statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse cursor-help"${rescueTip}>${priorityText}</span>`;
                 } else if (calculatedStatus === '매도') {
-                    const sharesText = (!item.isCash && item._sellExcessShares > 0) ? ` (최소 ${item._sellExcessShares.toLocaleString()}주)` : '';
-                    const sellTip = item._sellExcessCost ? ` title="밴드상한 복귀 최소매도액: ₩${item._sellExcessCost.toLocaleString()}${sharesText}"` : '';
+                    const sellSharesText = (!item.isCash && item._sellExcessShares > 0) ? ` (최소 ${item._sellExcessShares.toLocaleString()}주)` : '';
+                    const sellTip = item._sellExcessCost ? ` title="밴드상한 복귀 최소매도액: ₩${item._sellExcessCost.toLocaleString()}${sellSharesText}"` : '';
                     statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse cursor-help"${sellTip}>🔴 매도</span>`;
                 }
 
@@ -578,17 +649,19 @@ function renderPaginatedRows() {
                 const calculatedStatus = item._calculatedStatus || '-';
                 const buyPriority = item._buyPriority;
 
+                // 💡 [모바일 툴팁 데이터 구성]
                 let statusBadge = '<span class="text-slate-400 text-[10px] font-bold">-</span>';
                 if (calculatedStatus === '유지') {
                     statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">✅ 유지</span>';
                 } else if (calculatedStatus === '매수') {
                     const priorityText = buyPriority ? `🔵 매수 ${buyPriority}` : '🔵 매수';
-                    const rescueTip = item._rescueCost ? ` title="밴드하한 복귀 최소필요액: ₩${item._rescueCost.toLocaleString()}"` : '';
-                    statusBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700"${rescueTip}>${priorityText}</span>`;
+                    const buySharesText = (!item.isCash && item._rescueShares > 0) ? ` (최소 ${item._rescueShares.toLocaleString()}주)` : '';
+                    const rescueMsg = item._rescueCost ? `밴드하한 복귀 최소필요액: ₩${item._rescueCost.toLocaleString()}${buySharesText}` : '';
+                    statusBadge = `<button type="button" class="mobile-rebalance-status-badge px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition cursor-pointer" data-tooltip="${rescueMsg}">${priorityText}</button>`;
                 } else if (calculatedStatus === '매도') {
-                    const sharesText = (!item.isCash && item._sellExcessShares > 0) ? ` (최소 ${item._sellExcessShares.toLocaleString()}주)` : '';
-                    const sellTip = item._sellExcessCost ? ` title="밴드상한 복귀 최소매도액: ₩${item._sellExcessCost.toLocaleString()}${sharesText}"` : '';
-                    statusBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700"${sellTip}>🔴 매도</span>`;
+                    const sellSharesText = (!item.isCash && item._sellExcessShares > 0) ? ` (최소 ${item._sellExcessShares.toLocaleString()}주)` : '';
+                    const sellMsg = item._sellExcessCost ? `밴드상한 복귀 최소매도액: ₩${item._sellExcessCost.toLocaleString()}${sellSharesText}` : '';
+                    statusBadge = `<button type="button" class="mobile-rebalance-status-badge px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 active:scale-95 transition cursor-pointer" data-tooltip="${sellMsg}">🔴 매도</button>`;
                 }
 
                 let diffText = '₩0';
@@ -654,6 +727,16 @@ function renderPaginatedRows() {
             }).join('');
 
             mobileList.innerHTML = mobileHeaderHtml + mobileCardsHtml;
+
+            // 💡 [모바일 배지 터치 이벤트 바인딩]
+            const statusBadges = mobileList.querySelectorAll('.mobile-rebalance-status-badge');
+            statusBadges.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const tooltipMsg = btn.dataset.tooltip;
+                    showMobileTooltip(btn, tooltipMsg);
+                });
+            });
 
             const editTriggers = mobileList.querySelectorAll('.mobile-target-edit-trigger');
             editTriggers.forEach(btn => {

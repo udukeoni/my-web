@@ -16,27 +16,45 @@
 
   <main class="max-w-6xl mx-auto space-y-4">
     
-    <!-- 0. 상단 네비게이션 헤더 바 -->
-    <header class="bg-white px-3.5 sm:px-6 py-3 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between gap-2 select-none">
+    <!-- 0. 상단 네비게이션 헤더 바 (모바일: 아이콘 전용 / PC: 아이콘+텍스트) -->
+    <header class="bg-white px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between gap-2 select-none">
       <div class="flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block animate-pulse"></span>
-        <h1 class="font-bold text-base sm:text-xl text-slate-900 tracking-tight">
+        <h1 class="font-bold text-sm sm:text-xl text-slate-900 tracking-tight">
           사용자 관리
         </h1>
-        <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
-          관리자 전용
+        <span class="text-[10px] sm:text-[11px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+          관리자
         </span>
       </div>
 
-      <nav class="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-medium whitespace-nowrap">
-        <a href="../index.html" class="text-slate-500 hover:text-blue-600 transition py-1">공포탐욕지수</a>
-        <a href="portfolio.html" class="text-slate-500 hover:text-blue-600 transition py-1">포트폴리오</a>
-        <a href="admin-users.html" class="text-blue-600 border-b-2 border-blue-600 pb-0.5 font-bold">사용자관리</a>
+      <nav class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-medium whitespace-nowrap">
+        <!-- 공포탐욕지수 링크 -->
+        <a href="../index.html" title="공포탐욕지수" 
+           class="text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition p-2 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5">
+          <i class="fa-solid fa-gauge-high text-sm sm:text-xs"></i>
+          <span class="hidden md:inline">공포탐욕지수</span>
+        </a>
+
+        <!-- 포트폴리오 링크 -->
+        <a href="portfolio.html" title="포트폴리오" 
+           class="text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition p-2 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5">
+          <i class="fa-solid fa-chart-pie text-sm sm:text-xs"></i>
+          <span class="hidden md:inline">포트폴리오</span>
+        </a>
+
+        <!-- 사용자관리 (현재 페이지 활성화) -->
+        <a href="admin-users.html" title="사용자 관리" 
+           class="text-blue-600 bg-blue-50 font-bold p-2 sm:px-3 sm:py-1.5 rounded-lg border border-blue-200 flex items-center gap-1.5">
+          <i class="fa-solid fa-users-gear text-sm sm:text-xs"></i>
+          <span class="hidden md:inline">사용자관리</span>
+        </a>
         
+        <!-- 로그아웃 버튼 -->
         <button type="button" onclick="handleAppLogout()" title="로그아웃" 
-                class="text-slate-500 hover:text-red-600 p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-50 hover:bg-red-50 transition flex items-center gap-1 border border-slate-200 active:scale-95 cursor-pointer">
-          <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
-          <span class="hidden sm:inline font-bold text-xs">로그아웃</span>
+                class="text-slate-500 hover:text-red-600 p-2 sm:px-3 sm:py-1.5 rounded-lg bg-slate-50 hover:bg-red-50 transition flex items-center gap-1.5 border border-slate-200 active:scale-95 cursor-pointer ml-1">
+          <i class="fa-solid fa-arrow-right-from-bracket text-sm sm:text-xs"></i>
+          <span class="hidden md:inline font-bold">로그아웃</span>
         </button>
       </nav>
     </header>
@@ -93,7 +111,6 @@
           <span id="logCountBadge" class="bg-emerald-50 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">0건</span>
         </div>
 
-        <!-- 💡 우측 검색대 (콤보박스 + 텍스트 검색창) -->
         <div class="flex items-center gap-1.5 w-full md:w-auto">
           <select id="logSearchField" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="user_id">사용자 ID</option>
@@ -113,7 +130,6 @@
         </div>
       </div>
 
-      <!-- 로그 테이블 -->
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs">
           <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
@@ -133,7 +149,6 @@
         </table>
       </div>
 
-      <!-- 💡 하단 10건 페이징 컨트롤 바 -->
       <div id="logPaginationBar" class="p-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 bg-slate-50/50">
         <div class="text-[11px] text-slate-500">
           <span id="logPageInfo">1-10 / 총 0건</span>
@@ -164,11 +179,10 @@
 
   </main>
 
-  <!-- 3. 회원 정보 수정 / 상태 변경 / 삭제 팝업 모달창 -->
+  <!-- 3. 회원 정보 관리 모달창 -->
   <div id="editUserModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-150">
       
-      <!-- 모달 상단 헤더 -->
       <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
         <div class="flex items-center gap-2">
           <div class="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 text-xs">
@@ -181,9 +195,7 @@
         </button>
       </div>
 
-      <!-- 모달 폼 바디 -->
       <form id="editUserForm" onsubmit="handleEditUserSubmit(event)" class="p-5 space-y-3.5 text-xs">
-        
         <div>
           <label class="block font-semibold text-slate-700 mb-1">사용자 ID <span class="text-slate-400 font-normal">(변경 불가)</span></label>
           <input type="text" id="modalUserId" readonly
@@ -231,7 +243,6 @@
             </button>
           </div>
         </div>
-
       </form>
     </div>
   </div>
@@ -262,7 +273,7 @@
         cachedAllLogs = data.loginLogs || [];
         
         renderUsers(cachedUsersList);
-        applyLogSearch(); // 검색 조건 반영 및 10건 페이징 렌더링
+        applyLogSearch();
       } catch (err) {
         alert('데이터 로드 실패: ' + err.message);
       } finally {
@@ -349,7 +360,6 @@
       }
     }
 
-    // 💡 검색 및 페이징 엔진
     function applyLogSearch() {
       const field = document.getElementById('logSearchField').value;
       const keyword = document.getElementById('logSearchKeyword').value.trim().toLowerCase();
@@ -370,7 +380,7 @@
         });
       }
 
-      currentLogPage = 1; // 검색 시 1페이지로 리셋
+      currentLogPage = 1;
       renderPaginatedLogs();
     }
 
@@ -456,7 +466,6 @@
       renderPaginatedLogs();
     }
 
-    // 모달 제어 함수
     function openEditUserModal(userId) {
       const user = cachedUsersList.find(u => u.user_id === userId);
       if (!user) return;
@@ -622,7 +631,6 @@
     document.addEventListener('DOMContentLoaded', () => {
       loadAdminData();
 
-      // 실시간 검색어 입력 이벤트 바인딩
       const searchInput = document.getElementById('logSearchKeyword');
       const searchField = document.getElementById('logSearchField');
 

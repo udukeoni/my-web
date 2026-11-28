@@ -106,10 +106,16 @@ async function fetchD1Portfolio() {
                 if (found) accName = found.account_name;
             }
 
-            const isRebalanceAccount = (currentAccount === 'MIRAE_PENSION') || 
-                                       (currentAccount === 'SAMSUNG_ISA') || 
-                                       (accName && (accName.includes('연금') || accName.includes('ISA'))) || 
-                                       (currentAccount && (currentAccount.includes('연금') || currentAccount.includes('ISA')));
+            // 💡 지원 계좌 판별 조건 확장 및 DB 저장값 동기화
+            const isRebalanceAccount = (currentAccount !== 'ALL') && (
+                currentAccount === 'MIRAE_PENSION' || 
+                currentAccount === 'SAMSUNG_ISA' || 
+                currentAccount === 'MIRAE_01' || currentAccount === '미래에셋' ||
+                currentAccount === 'SAMSUNG_GEN' || currentAccount === '삼성-일반' ||
+                currentAccount === 'SAMSUNG_PENSION' || currentAccount === '삼성-연금저축' ||
+                (accName && (accName.includes('연금') || accName.includes('ISA') || accName.includes('일반') || accName.includes('미래에셋'))) || 
+                (currentAccount && (currentAccount.includes('연금') || currentAccount.includes('ISA') || currentAccount.includes('일반') || currentAccount.includes('미래에셋')))
+            );
 
             let cashTargetWeight = null;
             let cashBandMin = null;
@@ -120,28 +126,22 @@ async function fetchD1Portfolio() {
             if (isRebalanceAccount) {
                 const cashDbSetting = data.rebalanceCashSetting || {};
 
-                cashTargetWeight = (cashDbSetting.target_weight !== undefined && cashDbSetting.target_weight !== null)
-                    ? Number(cashDbSetting.target_weight)
-                    : 10.0;
+                if (cashDbSetting.target_weight !== undefined && cashDbSetting.target_weight !== null) {
+                    cashTargetWeight = Number(cashDbSetting.target_weight);
+                    cashBandMin = Number((cashTargetWeight * 0.8).toFixed(2));
+                    cashBandMax = Number((cashTargetWeight * 1.2).toFixed(2));
 
-                cashBandMin = (cashDbSetting.band_min !== undefined && cashDbSetting.band_min !== null)
-                    ? Number(cashDbSetting.band_min)
-                    : Math.max(0, Number((cashTargetWeight - 2.0).toFixed(2)));
+                    if (cashWeight < cashBandMin) {
+                        cashStatus = '매수';
+                    } else if (cashWeight > cashBandMax) {
+                        cashStatus = '매도';
+                    } else {
+                        cashStatus = '유지';
+                    }
 
-                cashBandMax = (cashDbSetting.band_max !== undefined && cashDbSetting.band_max !== null)
-                    ? Number(cashDbSetting.band_max)
-                    : Number((cashTargetWeight + 2.0).toFixed(2));
-
-                if (cashWeight < cashBandMin) {
-                    cashStatus = '매수';
-                } else if (cashWeight > cashBandMax) {
-                    cashStatus = '매도';
-                } else {
-                    cashStatus = '유지';
+                    const targetCashVal = totalNetWorth * (cashTargetWeight / 100.0);
+                    cashDiffAmount = Math.round(targetCashVal - cashBalance);
                 }
-
-                const targetCashVal = totalNetWorth * (cashTargetWeight / 100.0);
-                cashDiffAmount = Math.round(targetCashVal - cashBalance);
             }
 
             tableDisplayHoldings.push({

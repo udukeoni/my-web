@@ -77,9 +77,13 @@ if (typeof window !== 'undefined' && !window.__mobileTooltipBound) {
 
 function isRebalanceSupportedAccount(accId) {
     const acc = accId || (typeof currentAccount !== 'undefined' ? currentAccount : 'ALL');
+    if (acc === 'ALL') return false;
     return acc === 'MIRAE_PENSION' || 
            acc === 'SAMSUNG_ISA' || 
-           (acc && (acc.includes('연금') || acc.includes('ISA')) && acc !== 'ALL');
+           acc === 'MIRAE_01' || acc === '미래에셋' ||
+           acc === 'SAMSUNG_GEN' || acc === '삼성-일반' ||
+           acc === 'SAMSUNG_PENSION' || acc === '삼성-연금저축' ||
+           (acc && (acc.includes('연금') || acc.includes('ISA') || acc.includes('일반') || acc.includes('미래에셋')) && acc !== 'ALL');
 }
 
 // 동일 ticker 중복 집계 방지 단일 합산 헬퍼
